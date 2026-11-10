@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi" data-theme="pop">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- MANDATORY: Declare support for both light and dark themes to prevent FOUC -->
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        const storedScheme = localStorage.getItem('color-scheme');
+        if (storedScheme === 'light' || storedScheme === 'dark') {
+          document.querySelector('meta[name="color-scheme"]').content = storedScheme;
+        }
+        const storedTheme = localStorage.getItem('fn-theme-id');
+        if (storedTheme) {
+          document.documentElement.dataset.theme = storedTheme;
+        }
+      } catch {}
+    </script>
+    <meta name="theme-color" content="#F8F6F0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>VOI · Không còn né tránh, cùng VOI làm chủ chi tiêu</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

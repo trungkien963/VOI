@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+@source '../../';
+@source '../../../index.html';
+
+:root {
+  color-scheme: light dark;
+
+  /* 80% Warm Editorial Cream Canvas & Pure White Cards */
+  --bg-canvas: light-dark(#f8f6f0, #131312);
+  --bg-card: light-dark(#ffffff, #1d1d1b);
+  --bg-subtle: light-dark(#f4f1e8, #272724);
+  --border-hairline: light-dark(#ebe6d8, #30302c);
+  --border-strong: light-dark(#d8d1c0, #42423d);
+
+  /* 10% Editorial Deep Ink & Typography */
+  --ink-primary: light-dark(#18181b, #f6f5f0);
+  --ink-secondary: light-dark(#57554f, #a8a59e);
+  --ink-muted: light-dark(#8c887f, #73706a);
+  --dock-bg: #18181b;
+  --dock-border: #2c2c2a;
+  --dock-text: #a6a39b;
+
+  /* 10% Warm Editorial Pop Semantic Palette (8 Shapes) */
+  --pop-coral: #ff6b35; /* Triangle: Cost / Chi tiêu */
+  --pop-mint: #10b981; /* Square: Earn / Thu nhập */
+  --pop-lavender: #8b5cf6; /* Circle: Borrow & Lend / Sổ nợ */
+  --pop-teal: #0d9488; /* Diamond: Transfer / Chuyển khoản */
+  --pop-honey: #ffb703; /* Arch: Savings & Goals / Tiết kiệm */
+  --pop-cobalt: #3b82f6; /* Hexagon: Bank & Fixed Bills */
+  --pop-rose: #f472b6; /* Pentagon: Credit Card & Installment */
+  --pop-blossom: #fb7185; /* Rainbow: Rewards & Cashback */
+
+  /* Active Theme Pop Accent (Default: Coral Cost Pop) */
+  --accent-pop: #ff6b35;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#fff1eb, #2d1a12);
+
+  /* Radii & Shadows */
+  --radius-card: 24px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.03), 0 10px 28px -8px rgba(24, 24, 27, 0.05);
+  --shadow-dock: 0 12px 32px -6px rgba(24, 24, 27, 0.26), 0 2px 8px rgba(24, 24, 27, 0.14);
+}
+
+/* Theme Preset Overrides */
+:root[data-theme='pop'] {
+  --accent-pop: #ff6b35;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#fff1eb, #2d1a12);
+}
+
+:root[data-theme='cobalt'] {
+  --accent-pop: #3b82f6;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#eff6ff, #132038);
+}
+
+:root[data-theme='matcha'] {
+  --accent-pop: #10b981;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#ecfdf5, #0f291e);
+}
+
+:root[data-theme='flamingo'] {
+  --accent-pop: #8b5cf6;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#f5f3ff, #231838);
+}
+
+:root[data-theme='sunny'] {
+  --accent-pop: #ffb703;
+  --accent-pop-fg: #18181b;
+  --accent-pop-soft: light-dark(#fffbeb, #2c2208);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:has(> head > meta[name='color-scheme'][content='light dark']) {
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 8px 24px -6px rgba(0, 0, 0, 0.45);
+  }
+}
+
+:root:has(> head > meta[name='color-scheme'][content='dark']),
+:root[data-color-mode='dark'] {
+  color-scheme: dark;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 8px 24px -6px rgba(0, 0, 0, 0.45);
+}
+
+:root:has(> head > meta[name='color-scheme'][content='light']),
+:root[data-color-mode='light'] {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-family:
+    'Be Vietnam Pro',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  min-height: 100dvh;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.clean-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}

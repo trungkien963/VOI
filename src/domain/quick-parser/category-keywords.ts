@@ -1,0 +1,200 @@
+import { normalizeVietnamese } from './amount-extractor';
+
+export const EXPENSE_TARGET_GUARD_WORDS = new Set([
+  'the',
+  'tien nha',
+  'tien tro',
+  'tien dien',
+  'tien nuoc',
+  'tien net',
+  'tien wifi',
+  'tien rac',
+  'tien hoc',
+  'tien xang',
+  'tien com',
+  'gop',
+  'tra gop',
+  'phi',
+  'lai',
+  'hoa don',
+  'bill',
+  'sua',
+  'da',
+  'dao',
+  'chanh',
+  'xanh',
+  'tac',
+  'oi',
+  'vai',
+  'sen',
+]);
+
+export const EXTRA_CATEGORY_KEYWORD_MAP: ReadonlyArray<{ keywords: string[]; slug: string }> = [
+  {
+    keywords: [
+      'cf',
+      'cafe',
+      'ca phe',
+      'coffee',
+      'tra sua',
+      'boba',
+      'matcha',
+      'highlands',
+      'katinat',
+      'starbucks',
+      'phuc long',
+    ],
+    slug: 'coffee-tea',
+  },
+  {
+    keywords: [
+      'com',
+      'pho',
+      'bun',
+      'mi',
+      'banh mi',
+      'an sang',
+      'an trua',
+      'an toi',
+      'lunch',
+      'dinner',
+      'breakfast',
+      'oc',
+      'lau',
+      'hadilao',
+      'haidilao',
+      'nuong',
+      'bbq',
+      'buffet',
+      'sushi',
+      'pizza',
+    ],
+    slug: 'eating-out',
+  },
+  {
+    keywords: ['grabfood', 'shopeefood', 'befood', 'food delivery', 'ship do an'],
+    slug: 'food-delivery',
+  },
+  {
+    keywords: [
+      'di cho',
+      'sieu thi',
+      'bhx',
+      'winmart',
+      'coopmart',
+      'groceries',
+      'rau',
+      'thit',
+      'trai cay',
+    ],
+    slug: 'groceries',
+  },
+  {
+    keywords: ['xang', 'do xang', 'gui xe', 've xe', 'parking', 'fuel'],
+    slug: 'fuel-parking',
+  },
+  {
+    keywords: ['grab', 'grabbike', 'grabcar', 'be', 'xanh sm', 'taxi', 'uber'],
+    slug: 'ride-hailing',
+  },
+  {
+    keywords: ['tien nha', 'tien tro', 'thue nha', 'rent'],
+    slug: 'rent',
+  },
+  {
+    keywords: [
+      'dien nuoc',
+      'tien dien',
+      'tien nuoc',
+      'wifi',
+      'internet',
+      'nap dt',
+      'nap dien thoai',
+      'nap 4g',
+      'nap 5g',
+      'viettel',
+      'mobifone',
+      'vinaphone',
+    ],
+    slug: 'utilities',
+  },
+  {
+    keywords: ['shopee', 'lazada', 'tiki', 'tiktok shop', 'mua sam', 'shopping'],
+    slug: 'shopping',
+  },
+  {
+    keywords: ['ao', 'quan', 'quan ao', 'giay', 'vay', 'son', 'my pham', 'uniqlo', 'zara'],
+    slug: 'fashion-beauty',
+  },
+  {
+    keywords: [
+      'nhau',
+      'bia',
+      'hen ho',
+      'date',
+      'karaoke',
+      'sinh nhat',
+      'concert',
+      've concert',
+      'tien concert',
+      'liveshow',
+      'show nhac',
+      'su kien',
+    ],
+    slug: 'hangout-dating',
+  },
+  {
+    keywords: [
+      'netflix',
+      'spotify',
+      'youtube',
+      'icloud',
+      'cgv',
+      'lotte cinema',
+      'xem phim',
+      'nap game',
+      'steam',
+    ],
+    slug: 'subscriptions-media',
+  },
+  {
+    keywords: ['thuoc', 'kham benh', 'benh vien', 'nha khoa', 'gym', 'yoga', 'cat toc', 'skincare'],
+    slug: 'health-personal',
+  },
+  {
+    keywords: [
+      'bieu',
+      'gui bo me',
+      'gui me',
+      'gui gia dinh',
+      'mung cuoi',
+      'dam cuoi',
+      'li xi',
+      'tham hoi',
+    ],
+    slug: 'family-giving',
+  },
+  {
+    keywords: ['luong', 'nhan luong', 'salary', 'payroll'],
+    slug: 'salary',
+  },
+  {
+    keywords: ['thuong', 'nhan thuong', 'bonus', 'hoa hong', 'kpi'],
+    slug: 'bonus',
+  },
+  {
+    keywords: ['freelance', 'lam them', 'job ngoai', 'parttime', 'ot'],
+    slug: 'freelance',
+  },
+  {
+    keywords: ['hoan tien', 'cashback', 'duoc tang', 'duoc cho'],
+    slug: 'gifts-cashback',
+  },
+];
+
+export function hasWholePhrase(normText: string, rawPhrase: string): boolean {
+  const normPhrase = normalizeVietnamese(rawPhrase);
+  if (!normPhrase) return false;
+  const escaped = normPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)${escaped}(?:\\s|$)`).test(normText);
+}

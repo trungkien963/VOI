@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Nền Warm Cream (Editorial Badge / Dark Mode Variant) -->
+  <rect width="512" height="512" rx="115" fill="#F1EED5" />
+  <!-- Khối Voi chính: Vòi chữ V + Thân Voi (Royal Cobalt) -->
+  <path d="M 420 170 L 420 340 L 160 340 L 100 220 L 135 220 L 170 290 L 230 170 Z" fill="#1E4FD3" />
+  <!-- Tai Voi / Đồng tiền chữ O (Sky Blue) -->
+  <circle cx="326" cy="255" r="68" fill="#5282E9" />
+  <!-- Mắt Voi (Trắng tinh — r=11 rõ nét ở kích thước nhỏ) -->
+  <circle cx="236" cy="200" r="11" fill="#FFFFFF" />
+</svg>
+
