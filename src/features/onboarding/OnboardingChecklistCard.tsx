@@ -111,10 +111,7 @@ export function OnboardingChecklistCard(): ReactElement | null {
     const activeAccounts = liveAccounts.filter((a) => !a.archived_at);
     const autoDone: ChecklistStepKey[] = [];
 
-    if (
-      !state.created_main_account &&
-      activeAccounts.some((a) => a.type === 'bank')
-    ) {
+    if (!state.created_main_account && activeAccounts.some((a) => a.type === 'bank')) {
       autoDone.push('created_main_account');
     }
     if (
@@ -123,10 +120,7 @@ export function OnboardingChecklistCard(): ReactElement | null {
     ) {
       autoDone.push('added_second_account_or_NA');
     }
-    if (
-      !state.added_credit_card_or_NA &&
-      activeAccounts.some((a) => a.type === 'credit_card')
-    ) {
+    if (!state.added_credit_card_or_NA && activeAccounts.some((a) => a.type === 'credit_card')) {
       autoDone.push('added_credit_card_or_NA');
     }
     if (
@@ -149,9 +143,7 @@ export function OnboardingChecklistCard(): ReactElement | null {
     }
     if (
       !state.tried_3_second_quick_add &&
-      liveRecurring.some(
-        (r) => r.is_active && (!r.total_occurrences || r.total_occurrences === 0),
-      )
+      liveRecurring.some((r) => r.is_active && (!r.total_occurrences || r.total_occurrences === 0))
     ) {
       autoDone.push('tried_3_second_quick_add');
     }

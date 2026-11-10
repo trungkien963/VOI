@@ -493,7 +493,11 @@ export function QuickAddSheet(): ReactElement {
                   value={splitOwnShareText}
                   onChange={(e) => setSplitOwnShareText(e.target.value)}
                   placeholder={
-                    defaultOwnShareMinor > 0 ? String(defaultOwnShareMinor) : isVi ? 'Tự chia đều' : 'Auto'
+                    defaultOwnShareMinor > 0
+                      ? String(defaultOwnShareMinor)
+                      : isVi
+                        ? 'Tự chia đều'
+                        : 'Auto'
                   }
                   className="mt-0.5 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-1 text-xs font-bold text-[var(--ink-primary)] tabular-nums"
                 />
@@ -529,9 +533,7 @@ export function QuickAddSheet(): ReactElement {
 
             {currentEvaluatedMinor > 0 && splitFriendNames.length > 0 && (
               <div className="rounded-xl bg-[var(--bg-card)] px-2.5 py-1 text-[11px] font-bold tabular-nums">
-                <span className="text-[var(--ink-secondary)]">
-                  {isVi ? 'Tổng: ' : 'Total: '}
-                </span>
+                <span className="text-[var(--ink-secondary)]">{isVi ? 'Tổng: ' : 'Total: '}</span>
                 <strong className="text-[var(--ink-primary)]">
                   {formatMoney(currentEvaluatedMinor, srcCurrency)}
                 </strong>
@@ -665,7 +667,10 @@ export function QuickAddSheet(): ReactElement {
           onChangeExpression={setExpression}
           onSubmit={(amountMinor) => void handleSaveTransaction(amountMinor)}
           submitLabel={
-            !editingTransactionId && kind === 'expense' && isSplitBill && splitFriendNames.length > 0
+            !editingTransactionId &&
+            kind === 'expense' &&
+            isSplitBill &&
+            splitFriendNames.length > 0
               ? isVi
                 ? `Lưu & Chia bill (${splitFriendNames.length + 1} người)`
                 : `Save & Split (${splitFriendNames.length + 1} ways)`

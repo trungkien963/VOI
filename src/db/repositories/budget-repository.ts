@@ -95,7 +95,8 @@ export class BudgetRepository extends BaseRepository<Budget> {
     baseMonthlyIncomeMinor = 15_000_000,
   ): Promise<void> {
     const income = baseMonthlyIncomeMinor > 0 ? baseMonthlyIncomeMinor : 15_000_000;
-    const round100k = (val: number): number => Math.max(500_000, Math.round(val / 100_000) * 100_000);
+    const round100k = (val: number): number =>
+      Math.max(500_000, Math.round(val / 100_000) * 100_000);
 
     const presets: Array<{ categoryId: string; limitMinor: number }> = [
       {
@@ -361,4 +362,3 @@ export class BudgetRepository extends BaseRepository<Budget> {
 }
 
 export const budgetRepository = new BudgetRepository();
-

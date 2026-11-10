@@ -102,7 +102,7 @@ describe('Milestone 6: Settings, App Lock, Data Portability, Analytics & Full E2
       accounts: snapshot.accounts,
       categories: snapshot.categories,
     });
-    expect(csv).toContain("\"'=HYPERLINK(\"\"http://evil.example\"\",\"\"Click\"\")\"");
+    expect(csv).toContain('"\'=HYPERLINK(""http://evil.example"",""Click"")"');
 
     // Guard blocks sign-out while outbox has pending items
     const guardBlocked = await evaluateSignOutGuard(db, 'vi');

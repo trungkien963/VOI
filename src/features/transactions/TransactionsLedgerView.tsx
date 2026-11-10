@@ -1,5 +1,14 @@
 import { useState, type ReactElement } from 'react';
-import { ChevronLeft, ChevronRight, Pencil, Plus, RotateCcw, Search, Trash2, Users } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useUiStore } from '../../app/ui-store';
 import { localDb } from '../../db/dexie-schema';
@@ -313,12 +322,7 @@ export function TransactionsLedgerView(): ReactElement {
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="shrink-0">
-            <CategoryIcon
-              slug={cat?.slug}
-              colorHex={cat?.color_hex}
-              txType={tx.type}
-              size="md"
-            />
+            <CategoryIcon slug={cat?.slug} colorHex={cat?.color_hex} txType={tx.type} size="md" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-[var(--ink-primary)]">{primaryLabel}</p>
@@ -462,8 +466,9 @@ export function TransactionsLedgerView(): ReactElement {
                     {group.dayLentMinor > 0 && (
                       <p className="text-[11px] font-medium text-[var(--ink-secondary)] tabular-nums">
                         {isVi ? 'Chi riêng: ' : 'Own: '}
-                        {formatMoney(-group.dayOwnExpenseMinor, 'VND', { hidden: hideBalances })} ·{' '}
-                        {isVi ? 'Trả hộ: ' : 'Lent: '}
+                        {formatMoney(-group.dayOwnExpenseMinor, 'VND', {
+                          hidden: hideBalances,
+                        })} · {isVi ? 'Trả hộ: ' : 'Lent: '}
                         {formatMoney(-group.dayLentMinor, 'VND', { hidden: hideBalances })}
                       </p>
                     )}
@@ -738,7 +743,9 @@ export function TransactionsLedgerView(): ReactElement {
                     </div>
                     <div className="space-y-1.5 border-t border-[var(--border-hairline)] pt-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-[var(--ink-secondary)]">{t.m3.groupSummaryPrefix}</span>
+                        <span className="text-[var(--ink-secondary)]">
+                          {t.m3.groupSummaryPrefix}
+                        </span>
                         <strong className="font-extrabold text-[var(--ink-primary)] tabular-nums">
                           {formatMoney(groupSummary.totalPaidMinor, selectedTx.currency, {
                             hidden: hideBalances,
@@ -746,7 +753,9 @@ export function TransactionsLedgerView(): ReactElement {
                         </strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[var(--ink-secondary)]">{t.m3.yourExpensePrefix}</span>
+                        <span className="text-[var(--ink-secondary)]">
+                          {t.m3.yourExpensePrefix}
+                        </span>
                         <strong className="font-extrabold text-[var(--ink-primary)] tabular-nums">
                           {formatMoney(groupSummary.ownExpenseMinor, selectedTx.currency, {
                             hidden: hideBalances,
@@ -754,9 +763,12 @@ export function TransactionsLedgerView(): ReactElement {
                         </strong>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[var(--ink-secondary)]">{t.m3.lentToOthersPrefix}</span>
+                        <span className="text-[var(--ink-secondary)]">
+                          {t.m3.lentToOthersPrefix}
+                        </span>
                         <strong className="font-extrabold text-[#059669] tabular-nums">
-                          +{formatMoney(groupSummary.lentMinor, selectedTx.currency, {
+                          +
+                          {formatMoney(groupSummary.lentMinor, selectedTx.currency, {
                             hidden: hideBalances,
                           })}
                         </strong>
@@ -781,7 +793,8 @@ export function TransactionsLedgerView(): ReactElement {
                                 {debt?.counterparty_name ?? comp.note ?? 'Friend'}
                               </span>
                               <span className="font-extrabold text-[#059669] tabular-nums">
-                                +{formatMoney(Math.abs(comp.amount_minor), comp.currency, {
+                                +
+                                {formatMoney(Math.abs(comp.amount_minor), comp.currency, {
                                   hidden: hideBalances,
                                 })}
                               </span>

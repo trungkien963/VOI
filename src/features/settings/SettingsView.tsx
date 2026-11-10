@@ -48,11 +48,7 @@ import { AuthAndAccountCard } from '../auth/AuthAndAccountCard';
 import { CustomTagsAndCategoriesBox } from './CustomTagsAndCategoriesBox';
 
 type SettingsSectionId =
-  | 'account_sync'
-  | 'appearance'
-  | 'categories_prefs'
-  | 'notifications'
-  | 'security_data';
+  'account_sync' | 'appearance' | 'categories_prefs' | 'notifications' | 'security_data';
 
 function triggerBrowserDownload(filename: string, content: string, mimeType: string): void {
   if (typeof document === 'undefined' || typeof Blob === 'undefined') return;
@@ -135,11 +131,7 @@ export function SettingsView(): ReactElement {
   const [feedbackText, setFeedbackText] = useState('');
 
   const categoryCount = useLiveQuery(() => localDb.categories.count(), [], 0);
-  const checklistState = useLiveQuery(
-    () => onboardingRepository.getStateReadOnly(),
-    [],
-    null,
-  );
+  const checklistState = useLiveQuery(() => onboardingRepository.getStateReadOnly(), [], null);
   const outboxItems = useLiveQuery(() => localDb.sync_outbox.toArray(), [], []);
   const pendingCount = outboxItems.filter((i) => (i.status ?? 'pending') === 'pending').length;
   const failedCount = outboxItems.filter((i) => i.status === 'dead_letter').length;
@@ -538,9 +530,7 @@ export function SettingsView(): ReactElement {
                                           : 'bg-[#71717A]/15 text-[var(--ink-secondary)]'
                                       }`}
                                     >
-                                      {isUnlocked
-                                        ? t.m5.themeUnlockedBadge
-                                        : t.m5.themeLockedBadge}
+                                      {isUnlocked ? t.m5.themeUnlockedBadge : t.m5.themeLockedBadge}
                                     </span>
                                   </div>
                                   <p className="text-xs text-[var(--ink-secondary)]">

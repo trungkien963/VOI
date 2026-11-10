@@ -123,9 +123,7 @@ export function AccountFormSheet({
           openingBalanceMinor: targetMinor,
         });
         await onboardingRepository.markStepCompleted(
-          accountType === 'credit_card'
-            ? 'added_credit_card_or_NA'
-            : 'added_second_account_or_NA',
+          accountType === 'credit_card' ? 'added_credit_card_or_NA' : 'added_second_account_or_NA',
         );
       }
 
@@ -293,11 +291,7 @@ export function AccountFormSheet({
 
         <div className="space-y-2 pt-1">
           <Button type="submit" variant="ink" size="lg" fullWidth disabled={submitting}>
-            {editingAccount
-              ? isVi
-                ? 'Lưu thay đổi'
-                : 'Save Changes'
-              : t.accounts.saveAccountBtn}
+            {editingAccount ? (isVi ? 'Lưu thay đổi' : 'Save Changes') : t.accounts.saveAccountBtn}
           </Button>
 
           {editingAccount && (

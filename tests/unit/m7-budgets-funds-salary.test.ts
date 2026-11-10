@@ -221,4 +221,3 @@ describe('budget-calculator & 3-tier financial correlation', () => {
     expect(status.suggestedAmountMinor).toBe(22_500_000);
   });
 });
-

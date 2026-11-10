@@ -289,7 +289,8 @@ export const vi: TranslationDictionary = {
     enablePushBtn: 'Bật thông báo nhắc lịch',
     pushEnabledBadge: 'Đã bật thông báo 🔔',
     notificationsTitle: 'Nhắc việc & Giờ yên lặng',
-    notificationsSubtitle: 'Tối đa 2 thông báo/ngày. Tuyệt đối không lộ số tiền hay tên trên màn hình khóa.',
+    notificationsSubtitle:
+      'Tối đa 2 thông báo/ngày. Tuyệt đối không lộ số tiền hay tên trên màn hình khóa.',
     notifDailyReminder: 'Nhắc nhập hằng ngày (chỉ gửi nếu hôm đó chưa ghi gì)',
     notifCreditCardDue: 'Hạn thanh toán thẻ tín dụng (trước 5 ngày & 1 ngày)',
     notifRecurringDue: 'Khoản định kỳ & trả góp đến hạn (đúng ngày)',

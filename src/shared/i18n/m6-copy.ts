@@ -113,8 +113,7 @@ export const M6_COPY: Record<SupportedLocale, M6TranslationCopy> = {
     restoreSuccessMsg: 'Đã khôi phục 100% dữ liệu từ bản sao lưu!',
     signOutBtn: 'Kiểm tra Đăng xuất an toàn',
     deleteAccountTitle: 'Vùng nguy hiểm · Xóa tài khoản vĩnh viễn',
-    deleteAccountDesc:
-      'Xóa vĩnh viễn toàn bộ dữ liệu trên máy và đám mây (xác nhận 2 bước).',
+    deleteAccountDesc: 'Xóa vĩnh viễn toàn bộ dữ liệu trên máy và đám mây (xác nhận 2 bước).',
     deleteStep1Btn: 'Xóa tài khoản vĩnh viễn',
     deleteStep2Prompt: 'Nhập chữ DELETE để xác nhận xóa vĩnh viễn:',
     deleteConfirmBtn: 'Xác nhận xóa vĩnh viễn',
@@ -128,4 +127,3 @@ export const M6_COPY: Record<SupportedLocale, M6TranslationCopy> = {
       'Chính sách Zero PII/Financial Leak: Không bao giờ gửi số tiền, ghi chú hay tên người nợ lên Analytics.',
   },
 };
-

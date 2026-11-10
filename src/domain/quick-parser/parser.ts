@@ -266,11 +266,7 @@ export function resolveEffectiveCategoryId(tx: {
   }
   if (tx.category_id === SYSTEM_CATEGORY_IDS.foodDining) {
     const parsed = parseQuickInput(tx.note);
-    if (
-      parsed.categoryId &&
-      parsed.categorySlug &&
-      !FOOD_CATEGORY_SLUGS.has(parsed.categorySlug)
-    ) {
+    if (parsed.categoryId && parsed.categorySlug && !FOOD_CATEGORY_SLUGS.has(parsed.categorySlug)) {
       return parsed.categoryId;
     }
   }

@@ -130,9 +130,7 @@ export interface FullDatabaseSnapshot {
   recurring_rules: RecurringRule[];
 }
 
-export async function createFullDatabaseSnapshot(
-  db: FnAppLocalDB,
-): Promise<FullDatabaseSnapshot> {
+export async function createFullDatabaseSnapshot(db: FnAppLocalDB): Promise<FullDatabaseSnapshot> {
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -242,4 +240,3 @@ export async function permanentlyDeleteAllUserData(
 
   return { deleted: true };
 }
-

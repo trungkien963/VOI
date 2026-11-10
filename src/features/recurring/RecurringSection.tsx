@@ -1,5 +1,18 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Banknote, CalendarClock, Check, ChevronRight, CreditCard, FastForward, Home, Plus, SkipForward, Trash2, X, Zap } from 'lucide-react';
+import {
+  Banknote,
+  CalendarClock,
+  Check,
+  ChevronRight,
+  CreditCard,
+  FastForward,
+  Home,
+  Plus,
+  SkipForward,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
 import { SYSTEM_CATEGORY_IDS } from '../../domain/categories/default-categories';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
@@ -149,66 +162,66 @@ export function RecurringSection(): ReactElement {
       {/* 1-Tap Quick Templates (Only shown when adding or empty) */}
       {showAdd && (
         <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-bold text-[var(--ink-muted)]">
-          {isVi ? 'Mẫu nhanh:' : 'Presets:'}
-        </span>
-        <button
-          type="button"
-          onClick={() =>
-            applyQuickPreset({
-              kind: 'salary',
-              title: isVi ? 'Lương hàng tháng' : 'Monthly Salary',
-              amount: '18000000',
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-full border border-[#10B981]/35 bg-[#10B981]/12 px-2.5 py-1 text-[11px] font-bold text-[#059669] transition hover:bg-[#10B981]/20"
-        >
-          <Banknote className="h-3 w-3 text-[#059669]" />
-          <span>{isVi ? 'Lương tháng' : 'Salary'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            applyQuickPreset({
-              kind: 'bill',
-              title: isVi ? 'Tiền thuê nhà' : 'Monthly Rent',
-              amount: '4500000',
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
-        >
-          <Home className="h-3 w-3 text-[#2563EB]" />
-          <span>{isVi ? 'Tiền nhà' : 'Rent'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            applyQuickPreset({
-              kind: 'bill',
-              title: isVi ? 'Tiền điện & nước' : 'Electricity & Water',
-              amount: '850000',
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
-        >
-          <Zap className="h-3 w-3 text-[#F59E0B]" />
-          <span>{isVi ? 'Điện / Nước' : 'Utilities'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            applyQuickPreset({
-              kind: 'installment',
-              title: isVi ? 'Trả góp 3 tháng' : '3-Month Installment',
-              amount: '1500000',
-              terms: '3',
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-full border border-[#EC4899]/30 bg-[#EC4899]/10 px-2.5 py-1 text-[11px] font-bold text-[#DB2777] transition hover:bg-[#EC4899]/18"
-        >
-          <CreditCard className="h-3 w-3 text-[#DB2777]" />
-          <span>{isVi ? 'Trả góp 3 kỳ' : '3-Term Plan'}</span>
-        </button>
+          <span className="text-[11px] font-bold text-[var(--ink-muted)]">
+            {isVi ? 'Mẫu nhanh:' : 'Presets:'}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              applyQuickPreset({
+                kind: 'salary',
+                title: isVi ? 'Lương hàng tháng' : 'Monthly Salary',
+                amount: '18000000',
+              })
+            }
+            className="inline-flex items-center gap-1 rounded-full border border-[#10B981]/35 bg-[#10B981]/12 px-2.5 py-1 text-[11px] font-bold text-[#059669] transition hover:bg-[#10B981]/20"
+          >
+            <Banknote className="h-3 w-3 text-[#059669]" />
+            <span>{isVi ? 'Lương tháng' : 'Salary'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              applyQuickPreset({
+                kind: 'bill',
+                title: isVi ? 'Tiền thuê nhà' : 'Monthly Rent',
+                amount: '4500000',
+              })
+            }
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
+          >
+            <Home className="h-3 w-3 text-[#2563EB]" />
+            <span>{isVi ? 'Tiền nhà' : 'Rent'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              applyQuickPreset({
+                kind: 'bill',
+                title: isVi ? 'Tiền điện & nước' : 'Electricity & Water',
+                amount: '850000',
+              })
+            }
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
+          >
+            <Zap className="h-3 w-3 text-[#F59E0B]" />
+            <span>{isVi ? 'Điện / Nước' : 'Utilities'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              applyQuickPreset({
+                kind: 'installment',
+                title: isVi ? 'Trả góp 3 tháng' : '3-Month Installment',
+                amount: '1500000',
+                terms: '3',
+              })
+            }
+            className="inline-flex items-center gap-1 rounded-full border border-[#EC4899]/30 bg-[#EC4899]/10 px-2.5 py-1 text-[11px] font-bold text-[#DB2777] transition hover:bg-[#EC4899]/18"
+          >
+            <CreditCard className="h-3 w-3 text-[#DB2777]" />
+            <span>{isVi ? 'Trả góp 3 kỳ' : '3-Term Plan'}</span>
+          </button>
         </div>
       )}
 
@@ -653,7 +666,9 @@ export function RecurringSection(): ReactElement {
                       <button
                         type="button"
                         data-testid={`early-payoff-btn-${rule.id}`}
-                        onClick={() => void recurringRepository.settleInstallmentEarlyAtomic(rule.id)}
+                        onClick={() =>
+                          void recurringRepository.settleInstallmentEarlyAtomic(rule.id)
+                        }
                         className="inline-flex items-center gap-1 rounded-full border border-[#10B981]/35 bg-[#10B981]/12 px-2.5 py-1 text-[11px] font-bold text-[#065F46] hover:bg-[#10B981]/20"
                       >
                         <FastForward className="h-3 w-3 text-[#10B981]" />

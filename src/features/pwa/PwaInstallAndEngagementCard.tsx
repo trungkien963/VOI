@@ -103,7 +103,8 @@ export function PwaInstallAndEngagementCard(): ReactElement {
       try {
         const perm = await Notification.requestPermission();
         if (perm === 'granted' && 'serviceWorker' in navigator) {
-          await navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+          const swUrl = `${import.meta.env.BASE_URL ?? '/'}sw.js`;
+          await navigator.serviceWorker.register(swUrl).catch(() => undefined);
         }
       } catch {
         // Ignore in headless/test environments

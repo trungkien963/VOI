@@ -74,7 +74,14 @@ export function AppShell(): ReactElement {
     if (computedStreak !== streakDays) {
       setStreakDays(computedStreak);
     }
-  }, [liveTransactions, noSpendDates, weeklyFreezeAvailable, maxStreakDays, streakDays, setStreakDays]);
+  }, [
+    liveTransactions,
+    noSpendDates,
+    weeklyFreezeAvailable,
+    maxStreakDays,
+    streakDays,
+    setStreakDays,
+  ]);
 
   useEffect(() => {
     applyThemeToDom(themeId, colorMode);

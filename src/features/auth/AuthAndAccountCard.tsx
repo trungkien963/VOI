@@ -241,9 +241,7 @@ export function AuthAndAccountCard(): ReactElement {
               type="email"
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
-              placeholder={
-                isVi ? 'Nhập email nhận Magic Link...' : 'Enter email for Magic Link...'
-              }
+              placeholder={isVi ? 'Nhập email nhận Magic Link...' : 'Enter email for Magic Link...'}
               aria-label="Email Magic Link"
               data-testid="login-magic-email-input"
               className="flex-1 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-1.5 text-xs font-medium text-[var(--ink-primary)]"

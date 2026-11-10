@@ -1,11 +1,7 @@
 import type { ReactElement } from 'react';
 
 export type ClusterIconVariant =
-  | 'stay-together'
-  | 'calendar-check'
-  | 'wallet-stack'
-  | 'handshake-debt'
-  | 'chart-recap';
+  'stay-together' | 'calendar-check' | 'wallet-stack' | 'handshake-debt' | 'chart-recap';
 
 export type ClusterMascotMood = 'happy' | 'surplus' | 'warning' | 'danger' | 'payday';
 
@@ -41,12 +37,7 @@ export function GeometricClusterIcon({
     >
       {variant === 'stay-together' && (
         <g>
-          <path
-            d="M18 22v7M14.5 25.5h7"
-            stroke="#18181B"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
+          <path d="M18 22v7M14.5 25.5h7" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
           <circle cx="104" cy="24" r="3" stroke="#18181B" strokeWidth="1.5" />
 
           {/* Back Cobalt Geometric Shape (Earn/Bank) */}
@@ -149,10 +140,7 @@ export function GeometricClusterIcon({
                 strokeWidth="2.5"
                 strokeLinecap="round"
               />
-              <path
-                d="M54 56c5 6.5 19 6.5 24 0Z"
-                fill="#18181B"
-              />
+              <path d="M54 56c5 6.5 19 6.5 24 0Z" fill="#18181B" />
               <circle cx="105" cy="44" r="6.5" fill="#FFB703" stroke="#18181B" strokeWidth="1.3" />
             </>
           ) : (
@@ -309,10 +297,7 @@ export function GeometricClusterIcon({
 
       {variant === 'chart-recap' && (
         <g>
-          <path
-            d="M52 44c0-13.3 10.7-24 24-24s24 10.7 24 24v46H52V44Z"
-            fill="#FF6B35"
-          />
+          <path d="M52 44c0-13.3 10.7-24 24-24s24 10.7 24 24v46H52V44Z" fill="#FF6B35" />
           <circle cx="70" cy="46" r="2" fill="#18181B" />
           <circle cx="82" cy="46" r="2" fill="#18181B" />
 

@@ -4,7 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
+const basePath = process.env.VITE_BASE_PATH || '/';
+
 export default defineConfig({
+  base: basePath,
   plugins: [
     react(),
     tailwindcss(),
@@ -12,18 +15,19 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'FN-APP · Biết tiền mình đi đâu',
-        short_name: 'FN-APP',
+        name: 'VOI · Không còn né tránh, cùng VOI làm chủ chi tiêu',
+        short_name: 'VOI',
         description: 'Ghi chi tiêu dưới 5 giây, vui vẻ và không phán xét.',
         theme_color: '#FF6B00',
         background_color: '#F8F7F3',
         display: 'standalone',
         orientation: 'portrait',
         lang: 'vi',
-        start_url: '/',
+        start_url: basePath,
+        scope: basePath,
         icons: [
           {
-            src: '/favicon.svg',
+            src: 'favicon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',

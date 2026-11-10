@@ -19,8 +19,7 @@ export const useSecurityStore = create<SecurityState>()(
       saltedPinRecord: null,
       isAppLocked: false,
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
-      setSaltedPinRecord: (saltedPinRecord) =>
-        set({ saltedPinRecord, isAppLocked: false }),
+      setSaltedPinRecord: (saltedPinRecord) => set({ saltedPinRecord, isAppLocked: false }),
       lockApp: () => set({ isAppLocked: true }),
       unlockApp: () => set({ isAppLocked: false }),
     }),
@@ -29,4 +28,3 @@ export const useSecurityStore = create<SecurityState>()(
     },
   ),
 );
-

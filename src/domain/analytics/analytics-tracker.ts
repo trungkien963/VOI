@@ -125,4 +125,3 @@ export class PrivacySafeAnalyticsTracker {
 }
 
 export const analyticsTracker = new PrivacySafeAnalyticsTracker();
-

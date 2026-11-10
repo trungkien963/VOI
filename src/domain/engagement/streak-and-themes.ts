@@ -1,10 +1,6 @@
 import type { ThemeId, Transaction } from '../types/entities';
 
-export type ThemeUnlockRequirement =
-  | 'default'
-  | 'streak_3'
-  | 'streak_7'
-  | 'streak_30_or_checklist';
+export type ThemeUnlockRequirement = 'default' | 'streak_3' | 'streak_7' | 'streak_30_or_checklist';
 
 export interface ThemeUnlockStatus {
   themeId: ThemeId;
@@ -113,7 +109,12 @@ export function evaluateStreakAndFreeze(input: StreakEvaluationInput): StreakEva
 
   const missedDaysCount = isActiveToday ? 0 : daysSinceLatest;
   const showWelcomeBack =
-    activeDates.size > 0 && streakDays <= 1 && (daysSinceLatest >= 2 || (isActiveToday && sortedDatesDesc.length >= 2 && diffDaysIso(sortedDatesDesc[1]!, input.todayIso) > 2));
+    activeDates.size > 0 &&
+    streakDays <= 1 &&
+    (daysSinceLatest >= 2 ||
+      (isActiveToday &&
+        sortedDatesDesc.length >= 2 &&
+        diffDaysIso(sortedDatesDesc[1]!, input.todayIso) > 2));
   const showQuickCatchUpPrompt = daysSinceLatest >= 2;
   const maxStreakDays = Math.max(streakDays, input.previousMaxStreak ?? 0);
 

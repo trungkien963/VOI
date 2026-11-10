@@ -68,11 +68,7 @@ function diffDaysIso(fromIso: string, toIso: string): number {
   return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
-export function isWithinQuietHours(
-  currentHour: number,
-  quietStart = 22,
-  quietEnd = 7,
-): boolean {
+export function isWithinQuietHours(currentHour: number, quietStart = 22, quietEnd = 7): boolean {
   if (quietStart === quietEnd) return false;
   if (quietStart > quietEnd) {
     // Spans midnight (e.g. 22:00 -> 07:00)
@@ -115,9 +111,7 @@ export function evaluateDueNotifications(
   const { preferences, todayIso, currentHour, locale } = input;
   const isVi = locale === 'vi';
 
-  if (
-    isWithinQuietHours(currentHour, preferences.quietHoursStart, preferences.quietHoursEnd)
-  ) {
+  if (isWithinQuietHours(currentHour, preferences.quietHoursStart, preferences.quietHoursEnd)) {
     return { suppressedByQuietHours: true, notificationsToSend: [] };
   }
 

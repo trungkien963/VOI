@@ -285,9 +285,7 @@ export function BudgetAndFundsSection({
               onClick={() =>
                 void budgetRepository.applySmartPresetCapsAtomic(
                   overview.monthKey,
-                  salaryStatus.suggestedAmountMinor ||
-                    overview.monthlyIncomeMinor ||
-                    15_000_000,
+                  salaryStatus.suggestedAmountMinor || overview.monthlyIncomeMinor || 15_000_000,
                 )
               }
             >

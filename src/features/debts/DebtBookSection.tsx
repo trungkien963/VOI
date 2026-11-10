@@ -24,9 +24,7 @@ function renderPersonAvatar(displayName: string, isPositive: boolean): ReactElem
   return (
     <span
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-extrabold ${
-        isPositive
-          ? 'bg-[#10B981]/14 text-[#059669]'
-          : 'bg-[#141413]/10 text-[#141413]'
+        isPositive ? 'bg-[#10B981]/14 text-[#059669]' : 'bg-[#141413]/10 text-[#141413]'
       }`}
       aria-hidden="true"
     >
@@ -95,11 +93,7 @@ export function DebtBookSection(): ReactElement {
     pockets.find((p) => p.is_default && (p.currency ?? 'VND') === 'VND') ??
     pockets[0];
 
-  const allDebts = useLiveQuery(
-    () => debtRepository.listActiveDebts(),
-    [],
-    [] as DebtItem[],
-  );
+  const allDebts = useLiveQuery(() => debtRepository.listActiveDebts(), [], [] as DebtItem[]);
 
   const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
   const expenseCategories: ReadonlyArray<Category> = (
@@ -117,9 +111,7 @@ export function DebtBookSection(): ReactElement {
 
   const knownFriendNames = Array.from(
     new Set(
-      allDebts
-        .map((d) => (d.counterparty_name ?? '').trim())
-        .filter((name) => name.length > 0),
+      allDebts.map((d) => (d.counterparty_name ?? '').trim()).filter((name) => name.length > 0),
     ),
   );
 
@@ -332,7 +324,9 @@ export function DebtBookSection(): ReactElement {
           amountMinor: deduct,
           accountId: activePocket.account_id,
           pocketId: activePocket.id,
-          note: isVi ? `Cấn trừ nợ 2 chiều với ${group.displayName}` : `Netted off with ${group.displayName}`,
+          note: isVi
+            ? `Cấn trừ nợ 2 chiều với ${group.displayName}`
+            : `Netted off with ${group.displayName}`,
         });
         remainingToOffsetTheyOwe -= deduct;
       }
@@ -348,7 +342,9 @@ export function DebtBookSection(): ReactElement {
           amountMinor: deduct,
           accountId: activePocket.account_id,
           pocketId: activePocket.id,
-          note: isVi ? `Cấn trừ nợ 2 chiều với ${group.displayName}` : `Netted off with ${group.displayName}`,
+          note: isVi
+            ? `Cấn trừ nợ 2 chiều với ${group.displayName}`
+            : `Netted off with ${group.displayName}`,
         });
         remainingToOffsetIOwe -= deduct;
       }
@@ -957,10 +953,7 @@ export function DebtBookSection(): ReactElement {
         closeLabel={isVi ? 'Đóng' : 'Close'}
         headerAccessory={
           selectedPersonGroup
-            ? renderPersonAvatar(
-                selectedPersonGroup.displayName,
-                selectedPersonGroup.netMinor >= 0,
-              )
+            ? renderPersonAvatar(selectedPersonGroup.displayName, selectedPersonGroup.netMinor >= 0)
             : undefined
         }
       >
@@ -1031,7 +1024,8 @@ export function DebtBookSection(): ReactElement {
                               : isVi
                                 ? `Bạn nợ ${selectedPersonGroup.displayName}`
                                 : `You owe ${selectedPersonGroup.displayName}`}{' '}
-                            · {t.m3.principalLabel}: {formatMoney(item.principal_minor, item.currency)}
+                            · {t.m3.principalLabel}:{' '}
+                            {formatMoney(item.principal_minor, item.currency)}
                           </p>
                         </div>
 
@@ -1049,9 +1043,7 @@ export function DebtBookSection(): ReactElement {
 
                           <button
                             type="button"
-                            onClick={() =>
-                              setPartialRepayOpenId(isPartialOpen ? null : item.id)
-                            }
+                            onClick={() => setPartialRepayOpenId(isPartialOpen ? null : item.id)}
                             className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
                             title={isVi ? 'Thu/Trả 1 phần' : 'Partial Pay'}
                           >

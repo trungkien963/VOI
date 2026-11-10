@@ -4,9 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-    supabaseAnonKey &&
-    !supabaseAnonKey.includes('PASTE_YOUR_ANON_PUBLIC_KEY_HERE'),
+  supabaseUrl && supabaseAnonKey && !supabaseAnonKey.includes('PASTE_YOUR_ANON_PUBLIC_KEY_HERE'),
 );
 
 export const supabaseClient: SupabaseClient | null =
@@ -18,4 +16,3 @@ export const supabaseClient: SupabaseClient | null =
         },
       })
     : null;
-

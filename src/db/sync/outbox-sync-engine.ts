@@ -122,14 +122,8 @@ export class OutboxSyncEngine {
     const tx = await this.db.transactions.get(item.entity_id);
     if (!tx) return undefined;
 
-    const lines = await this.db.transaction_lines
-      .where('transaction_id')
-      .equals(tx.id)
-      .toArray();
-    const tags = await this.db.transaction_tags
-      .where('transaction_id')
-      .equals(tx.id)
-      .toArray();
+    const lines = await this.db.transaction_lines.where('transaction_id').equals(tx.id).toArray();
+    const tags = await this.db.transaction_tags.where('transaction_id').equals(tx.id).toArray();
 
     return {
       client_mutation_id: item.client_mutation_id,
@@ -208,9 +202,7 @@ export class OutboxSyncEngine {
   }
 
   public async retryFailedItems(): Promise<number> {
-    const failed = (await this.db.sync_outbox.toArray()).filter(
-      (i) => i.status === 'dead_letter',
-    );
+    const failed = (await this.db.sync_outbox.toArray()).filter((i) => i.status === 'dead_letter');
     for (const item of failed) {
       if (item.seq !== undefined) {
         await this.db.sync_outbox.update(item.seq, {

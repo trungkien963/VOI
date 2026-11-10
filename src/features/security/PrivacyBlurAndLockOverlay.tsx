@@ -124,4 +124,3 @@ export function PrivacyBlurAndLockOverlay(): ReactElement | null {
 
   return null;
 }
-

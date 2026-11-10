@@ -43,10 +43,7 @@ import {
 import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
-import {
-  GeometricClusterIcon,
-  type ClusterMascotMood,
-} from '../../shared/ui/GeometricClusterIcon';
+import { GeometricClusterIcon, type ClusterMascotMood } from '../../shared/ui/GeometricClusterIcon';
 import { ReconcileSheet } from '../assets/ReconcileSheet';
 import { BudgetAndFundsSection } from '../budgets/BudgetAndFundsSection';
 import { OnboardingChecklistCard } from '../onboarding/OnboardingChecklistCard';
@@ -208,12 +205,7 @@ export function HomeView(): ReactElement {
   const activeDatesSet = new Set(activeTxs.map((tx) => tx.txn_date));
   const selectedDayTransactions = activeTxs.filter((tx) => tx.txn_date === selectedDateIso);
 
-  const todayReport = computePeriodReportSummary(
-    liveTransactions,
-    liveLines,
-    todayIso,
-    todayIso,
-  );
+  const todayReport = computePeriodReportSummary(liveTransactions, liveLines, todayIso, todayIso);
   const selectedDayReport = computePeriodReportSummary(
     liveTransactions,
     liveLines,
@@ -498,9 +490,11 @@ export function HomeView(): ReactElement {
                 </strong>
                 {momComparison.deltaPercentage !== null && (
                   <span className="text-[10px] font-bold text-[var(--ink-muted)]">
-                    ({momComparison.deltaPercentage > 0
+                    (
+                    {momComparison.deltaPercentage > 0
                       ? `+${momComparison.deltaPercentage}%`
-                      : `${momComparison.deltaPercentage}%`})
+                      : `${momComparison.deltaPercentage}%`}
+                    )
                   </span>
                 )}
               </span>
@@ -924,7 +918,10 @@ export function HomeView(): ReactElement {
                           <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#10B981]/16 px-1.5 py-0.5 text-[10px] font-extrabold text-[#059669]">
                             <Sparkles className="h-2.5 w-2.5" />
                             <span>
-                              +{formatMoney(overview.totalFundSurplusMinor, 'VND', { hidden: hideBalances })}
+                              +
+                              {formatMoney(overview.totalFundSurplusMinor, 'VND', {
+                                hidden: hideBalances,
+                              })}
                             </span>
                           </span>
                         )}
@@ -932,7 +929,10 @@ export function HomeView(): ReactElement {
                       <p className="truncate text-[11px] font-medium text-[var(--ink-secondary)] tabular-nums">
                         {isVi ? 'Đã góp tháng này: ' : 'Contributed this month: '}
                         <span className="font-semibold text-[#059669]">
-                          +{formatMoney(overview.monthlyNetFundContributionMinor, 'VND', { hidden: hideBalances })}
+                          +
+                          {formatMoney(overview.monthlyNetFundContributionMinor, 'VND', {
+                            hidden: hideBalances,
+                          })}
                         </span>
                       </p>
                     </div>

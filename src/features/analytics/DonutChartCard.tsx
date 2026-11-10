@@ -84,11 +84,7 @@ export function DonutChartCard({
               </span>
               <span className="text-[10px] font-semibold text-[var(--ink-secondary)]">
                 {report.slices.length}{' '}
-                {isVi
-                  ? 'danh mục'
-                  : report.slices.length === 1
-                    ? 'category'
-                    : 'categories'}
+                {isVi ? 'danh mục' : report.slices.length === 1 ? 'category' : 'categories'}
               </span>
             </div>
           </div>

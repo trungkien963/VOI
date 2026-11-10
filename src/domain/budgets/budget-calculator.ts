@@ -148,7 +148,9 @@ export function resolveEffectiveBudgetsForMonth(
 ): Map<string, Budget> {
   const sorted = [...allBudgets]
     .filter((b) => b.limit_minor > 0 && b.month_key <= monthKey)
-    .sort((a, b) => a.month_key.localeCompare(b.month_key) || a.updated_at.localeCompare(b.updated_at));
+    .sort(
+      (a, b) => a.month_key.localeCompare(b.month_key) || a.updated_at.localeCompare(b.updated_at),
+    );
 
   const map = new Map<string, Budget>();
   for (const b of sorted) {
@@ -497,4 +499,3 @@ export function computeThreeTierFinancialOverview(params: {
     totalFundSurplusMinor,
   };
 }
-

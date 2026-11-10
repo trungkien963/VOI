@@ -162,4 +162,3 @@ export function shouldShowPrivacyBlurOverlay(params: {
   }
   return params.isDocumentHidden || params.isWindowBlurred;
 }
-

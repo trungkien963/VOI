@@ -208,9 +208,7 @@ export function AssetsAndDebtsView(): ReactElement {
 
   const handleRestoreAccount = async (acc: Account): Promise<void> => {
     await accountRepository.restoreAccountAtomic(acc.id);
-    setReconcileNotice(
-      isVi ? `Đã khôi phục ví "${acc.name}"!` : `Restored wallet "${acc.name}"!`,
-    );
+    setReconcileNotice(isVi ? `Đã khôi phục ví "${acc.name}"!` : `Restored wallet "${acc.name}"!`);
     setTimeout(() => setReconcileNotice(null), 4000);
   };
 
@@ -464,7 +462,8 @@ export function AssetsAndDebtsView(): ReactElement {
                       <div>
                         <span className="font-bold text-[var(--ink-primary)]">{arch.name}</span>
                         <span className="ml-2 text-[11px] text-[var(--ink-secondary)] tabular-nums">
-                          ({formatMoney(arch.cached_balance_minor, 'VND', { hidden: hideBalances })})
+                          ({formatMoney(arch.cached_balance_minor, 'VND', { hidden: hideBalances })}
+                          )
                         </span>
                       </div>
                       <Button
@@ -1024,9 +1023,7 @@ export function AssetsAndDebtsView(): ReactElement {
                   variant="outline"
                   size="sm"
                   fullWidth
-                  onClick={() =>
-                    void handleAddUsdPocket(selectedAccount.id, selectedAccount.name)
-                  }
+                  onClick={() => void handleAddUsdPocket(selectedAccount.id, selectedAccount.name)}
                 >
                   <span>{t.accounts.addPocketBtn} (USD)</span>
                 </Button>
