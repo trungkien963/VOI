@@ -13,12 +13,18 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: [
+        'favicon.svg',
+        'apple-touch-icon.png',
+        'apple-touch-icon-v3.png',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+      ],
       manifest: {
         name: 'VOI · Không còn né tránh, cùng VOI làm chủ chi tiêu',
         short_name: 'VOI',
         description: 'Ghi chi tiêu dưới 5 giây, vui vẻ và không phán xét.',
-        theme_color: '#1E4FD3',
+        theme_color: '#1243E0',
         background_color: '#F8F7F3',
         display: 'standalone',
         orientation: 'portrait',
