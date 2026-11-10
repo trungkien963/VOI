@@ -13,12 +13,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'VOI · Không còn né tránh, cùng VOI làm chủ chi tiêu',
         short_name: 'VOI',
         description: 'Ghi chi tiêu dưới 5 giây, vui vẻ và không phán xét.',
-        theme_color: '#FF6B00',
+        theme_color: '#1E4FD3',
         background_color: '#F8F7F3',
         display: 'standalone',
         orientation: 'portrait',
@@ -26,6 +26,18 @@ export default defineConfig({
         start_url: basePath,
         scope: basePath,
         icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
           {
             src: 'favicon.svg',
             sizes: 'any',
