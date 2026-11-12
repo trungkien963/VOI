@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { ArrowLeftRight, Check, ChevronRight, Copy, HandCoins, Users, X } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronRight, Copy, HandCoins, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
 import { debtRepository } from '../../db/repositories/debt-repository';
@@ -17,18 +17,25 @@ import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { EmptyStateCard } from '../../shared/ui/EmptyStateCard';
+import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
+import { VoiFlowIcon } from '../../shared/ui/VoiFlowIcon';
+import { useUiStore } from '../../app/ui-store';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 
 function renderPersonAvatar(displayName: string, isPositive: boolean): ReactElement {
   const initial = (displayName.trim()[0] ?? '?').toUpperCase();
   return (
     <span
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-extrabold ${
-        isPositive ? 'bg-[#10B981]/14 text-[#059669]' : 'bg-[#141413]/10 text-[#141413]'
+      className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-extrabold ${
+        isPositive ? 'bg-[#D0FFA3]/55 text-[#1E7E3A]' : 'bg-[#FFA3C5]/35 text-[#D9475C]'
       }`}
       aria-hidden="true"
     >
       {initial}
+      <span className="pointer-events-none absolute -right-1.5 -bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-card)] shadow-2xs">
+        <VoiFlowIcon variant={isPositive ? 'lend' : 'borrow'} size={15} />
+      </span>
     </span>
   );
 }
@@ -48,6 +55,8 @@ interface PersonDebtGroup {
 export function DebtBookSection(): ReactElement {
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const avatarId = useUiStore((s) => s.avatarId);
+  const activeBuddy = getAvatarPresetMeta(avatarId);
   const [filterTab, setFilterTab] = useState<DebtFilterTab>('people');
   const [direction, setDirection] = useState<DebtDirection>('they_owe');
   const [actionMode, setActionMode] = useState<DebtActionMode>('none');
@@ -390,7 +399,35 @@ export function DebtBookSection(): ReactElement {
 
   return (
     <div className="space-y-3.5">
-      {/* Top 3-Column Calm Summary Strip */}
+      {/* Companion Hero Stage with Oversized Corner-Peeking VOI */}
+      <div
+        style={{ backgroundColor: activeBuddy.cardBgHex }}
+        className="relative overflow-hidden rounded-[24px] border border-[#191919]/12 p-4 pr-24 text-[#191919] shadow-2xs"
+      >
+        <div className="pointer-events-none absolute -right-7 -bottom-7 h-32 w-32 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+        <div className="relative z-10 space-y-1">
+          <h3 className="text-sm font-black text-[#191919]">
+            {isVi ? 'Sổ Nợ & Chia Tiền' : 'IOUs & Bill Split'}
+          </h3>
+          <p className="text-xs font-semibold text-[#191919]/75">
+            {isVi
+              ? 'Bù trừ công nợ tự động 2 chiều & chia đều hoá đơn nhóm bạn.'
+              : 'Automatic bilateral IOU netting & group bill splitting.'}
+          </p>
+        </div>
+        <div className="pointer-events-none absolute -right-2 -bottom-3 z-10">
+          <GeometricBuddy
+            shape={activeBuddy.shape}
+            pose={
+              filterTab === 'they_owe' ? 'coin-toss' : filterTab === 'i_owe' ? 'memory' : undefined
+            }
+            mood="happy"
+            size={104}
+          />
+        </div>
+      </div>
+
+      {/* Top 3-Column Calm Summary Strip with VOI Cherry Icons */}
       <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
@@ -401,9 +438,12 @@ export function DebtBookSection(): ReactElement {
               : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)]/60 opacity-85 hover:opacity-100'
           }`}
         >
-          <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
-            {isVi ? 'Công nợ ròng' : 'Net Balance'}
-          </span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
+              {isVi ? 'Công nợ ròng' : 'Net Balance'}
+            </span>
+            <VoiFlowIcon variant="lend-borrow" size={24} />
+          </div>
           <p
             className={`mt-1 text-base font-extrabold tabular-nums ${
               netPositionMinor > 0
@@ -433,9 +473,12 @@ export function DebtBookSection(): ReactElement {
               : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)]/60 opacity-85 hover:opacity-100'
           }`}
         >
-          <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
-            {t.m3.receivableTab}
-          </span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
+              {t.m3.receivableTab}
+            </span>
+            <VoiFlowIcon variant="lend" size={24} />
+          </div>
           <p className="mt-1 text-base font-extrabold text-[#059669] tabular-nums">
             +{formatMoney(totalTheyOweMinor, 'VND')}
           </p>
@@ -456,9 +499,12 @@ export function DebtBookSection(): ReactElement {
               : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)]/60 opacity-85 hover:opacity-100'
           }`}
         >
-          <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
-            {t.m3.payableTab}
-          </span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="block truncate text-[10px] font-bold text-[var(--ink-secondary)] uppercase">
+              {t.m3.payableTab}
+            </span>
+            <VoiFlowIcon variant="borrow" size={24} />
+          </div>
           <p className="mt-1 text-base font-extrabold text-[var(--ink-primary)] tabular-nums">
             -{formatMoney(totalIOweMinor, 'VND')}
           </p>
@@ -469,18 +515,62 @@ export function DebtBookSection(): ReactElement {
       </div>
 
       <Card className="space-y-3">
-        {/* Clean Single-Row Action Header (Top 3 KPI Cards already serve as filter tabs) */}
+        {/* Clean Single-Row Action Header with Contextual Cherry Mascot Stage */}
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border-hairline)] pb-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-bold text-[var(--ink-primary)]">
-              {filterTab === 'people'
-                ? isVi
-                  ? `Hồ sơ theo người (${personGroups.length})`
-                  : `By Person (${personGroups.length})`
-                : filterTab === 'they_owe'
-                  ? t.m3.receivableTab
-                  : t.m3.payableTab}
-            </h3>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#191919]/10 bg-[#FFFFFF] shadow-xs">
+              <VoiFlowIcon
+                variant={
+                  actionMode === 'split_bill'
+                    ? 'lend-borrow'
+                    : actionMode === 'iou'
+                      ? direction === 'they_owe'
+                        ? 'lend'
+                        : 'borrow'
+                      : filterTab === 'they_owe'
+                        ? 'lend'
+                        : filterTab === 'i_owe'
+                          ? 'borrow'
+                          : 'lend-borrow'
+                }
+                mood={
+                  (actionMode === 'iou' && direction === 'they_owe') || filterTab === 'they_owe'
+                    ? 'excited'
+                    : (actionMode === 'iou' && direction === 'i_owe') || filterTab === 'i_owe'
+                      ? 'surprised'
+                      : 'happy'
+                }
+                size={34}
+              />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-bold text-[var(--ink-primary)]">
+                {filterTab === 'people'
+                  ? isVi
+                    ? `Hồ sơ theo người (${personGroups.length})`
+                    : `By Person (${personGroups.length})`
+                  : filterTab === 'they_owe'
+                    ? t.m3.receivableTab
+                    : t.m3.payableTab}
+              </h3>
+              <p className="truncate text-[10px] font-semibold text-[var(--ink-secondary)]">
+                {actionMode === 'split_bill'
+                  ? isVi
+                    ? 'Đôi Cherry · Chia đều hoá đơn nhóm'
+                    : 'Cherry Twins · Split group bill'
+                  : (actionMode === 'iou' && direction === 'they_owe') || filterTab === 'they_owe'
+                    ? isVi
+                      ? 'Cherry Đỏ · Khoản họ cần trả bạn'
+                      : 'Crimson Cherry · Receivable'
+                    : (actionMode === 'iou' && direction === 'i_owe') || filterTab === 'i_owe'
+                      ? isVi
+                        ? 'Cherry Hồng · Khoản bạn cần trả họ'
+                        : 'Blush Cherry · Payable'
+                      : isVi
+                        ? 'Đôi Cherry · Bù trừ công nợ hai chiều'
+                        : 'Cherry Twins · Net bilateral debt'}
+              </p>
+            </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
@@ -489,7 +579,7 @@ export function DebtBookSection(): ReactElement {
               size="xs"
               onClick={() => setActionMode((m) => (m === 'split_bill' ? 'none' : 'split_bill'))}
             >
-              <Users className="h-3.5 w-3.5" />
+              <VoiFlowIcon variant="lend-borrow" size={16} />
               <span>{isVi ? 'Chia bill' : 'Split Bill'}</span>
             </Button>
 

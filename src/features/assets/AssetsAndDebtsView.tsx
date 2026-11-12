@@ -28,7 +28,7 @@ import {
   computeThreeTierFinancialOverview,
   type FundProgressItem,
 } from '../../domain/budgets/budget-calculator';
-import { DEFAULT_SYSTEM_CATEGORIES } from '../../domain/categories/default-categories';
+import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import { computeNetWorth } from '../../domain/ledger/balance-calculator';
 import { computeCreditCardSummary } from '../../domain/ledger/credit-card-calculator';
 import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
@@ -38,8 +38,10 @@ import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { EmptyStateCard } from '../../shared/ui/EmptyStateCard';
+import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 import { DebtBookSection } from '../debts/DebtBookSection';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 import { RecurringSection } from '../recurring/RecurringSection';
 import { AccountFormSheet } from './AccountFormSheet';
 import { ReconcileSheet } from './ReconcileSheet';
@@ -89,9 +91,10 @@ function getWalletTypeMeta(
 }
 
 export function AssetsAndDebtsView(): ReactElement {
-  const { walletSubTab, setWalletSubTab, hideBalances } = useUiStore();
+  const { walletSubTab, setWalletSubTab, hideBalances, avatarId } = useUiStore();
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const activeBuddy = getAvatarPresetMeta(avatarId);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -140,6 +143,8 @@ export function AssetsAndDebtsView(): ReactElement {
   const allTransactions = useLiveQuery(() => localDb.transactions.toArray(), [], []);
   const budgets = useLiveQuery(() => localDb.budgets.toArray(), [], []);
   const debts = useLiveQuery(() => localDb.debt_items.toArray(), [], []);
+  const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
+  const allCategories = mergeSystemAndLiveCategories(liveCategories);
 
   const netWorthMinor = computeNetWorth({ pockets, debts });
   const walletsOnlyMinor = computeNetWorth({ pockets, debts: [] });
@@ -154,7 +159,7 @@ export function AssetsAndDebtsView(): ReactElement {
   const overview = computeThreeTierFinancialOverview({
     accounts,
     pockets,
-    categories: DEFAULT_SYSTEM_CATEGORIES,
+    categories: allCategories,
     transactions: allTransactions,
     lines: allLines,
     budgets,
@@ -284,62 +289,82 @@ export function AssetsAndDebtsView(): ReactElement {
 
       {walletSubTab === 'wallets' ? (
         <div className="space-y-4">
-          {/* CARD 1: LIQUID WALLETS, CREDIT CARDS & NET WORTH */}
+          {/* CARD 1: LIQUID WALLETS, CREDIT CARDS & NET WORTH WITH OVERSIZED CORNER-PEEKING MASCOT */}
           <Card>
-            <div className="space-y-2 border-b border-[var(--border-hairline)] pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-bold text-[var(--ink-primary)]">
-                    {t.accounts.sectionTitle}
-                  </h2>
-                  <p className="text-xs text-[var(--ink-secondary)]">{t.accounts.netWorthLabel}</p>
+            <div
+              style={{ backgroundColor: activeBuddy.cardBgHex }}
+              className="relative mb-2 overflow-hidden rounded-[24px] border border-[#191919]/12 p-4 pr-24 text-[#191919]"
+            >
+              <div className="pointer-events-none absolute -right-8 -bottom-8 h-36 w-36 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+              <div className="relative z-10 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-black text-[#191919]">{t.accounts.sectionTitle}</h2>
+                    <p className="text-[11px] font-bold text-[#191919]/70">
+                      {t.accounts.netWorthLabel}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ink"
+                    size="xs"
+                    className="shrink-0 whitespace-nowrap"
+                    onClick={() => {
+                      setEditingAccount(null);
+                      setIsAddOpen(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>{t.accounts.addAccountBtn}</span>
+                  </Button>
                 </div>
-                <Button
-                  variant="ink"
-                  size="xs"
-                  className="shrink-0 whitespace-nowrap"
-                  onClick={() => {
-                    setEditingAccount(null);
-                    setIsAddOpen(true);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>{t.accounts.addAccountBtn}</span>
-                </Button>
+
+                <div className="flex flex-wrap items-baseline gap-2 pt-0.5">
+                  <p
+                    className="text-2xl font-black tracking-tight text-[#191919] sm:text-3xl tabular-nums"
+                    data-testid="assets-net-worth"
+                  >
+                    {formatMoney(netWorthMinor, 'VND', { hidden: hideBalances })}
+                  </p>
+                  {(overview.savingsFundsMinor > 0 || netDebtMinor !== 0) && (
+                    <span className="rounded-full bg-[#FAFAFA]/85 px-2.5 py-0.5 text-[11px] font-bold text-[#191919] tabular-nums">
+                      {isVi ? 'Ví tiêu: ' : 'Liquid: '}
+                      {formatMoney(overview.liquidWalletsMinor, 'VND', { hidden: hideBalances })}
+                      {overview.savingsFundsMinor > 0 && (
+                        <>
+                          {' · '}
+                          <span className="text-[#1E7E3A]">
+                            {isVi ? 'Quỹ: ' : 'Funds: '}
+                            {formatMoney(overview.savingsFundsMinor, 'VND', {
+                              hidden: hideBalances,
+                            })}
+                          </span>
+                        </>
+                      )}
+                      {netDebtMinor !== 0 && (
+                        <>
+                          {' · '}
+                          {isVi ? 'Công nợ: ' : 'IOUs: '}
+                          {formatMoney(netDebtMinor, 'VND', {
+                            hidden: hideBalances,
+                            showPlusSign: netDebtMinor > 0,
+                          })}
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-baseline justify-between gap-2 pt-0.5">
-                <p
-                  className="text-2xl font-extrabold tracking-tight text-[var(--ink-primary)] tabular-nums"
-                  data-testid="assets-net-worth"
-                >
-                  {formatMoney(netWorthMinor, 'VND', { hidden: hideBalances })}
-                </p>
-                {(overview.savingsFundsMinor > 0 || netDebtMinor !== 0) && (
-                  <span className="rounded-lg bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-secondary)] tabular-nums">
-                    {isVi ? 'Ví tiêu: ' : 'Liquid: '}
-                    {formatMoney(overview.liquidWalletsMinor, 'VND', { hidden: hideBalances })}
-                    {overview.savingsFundsMinor > 0 && (
-                      <>
-                        {' · '}
-                        <span className="text-[#059669]">
-                          {isVi ? 'Quỹ: ' : 'Funds: '}
-                          {formatMoney(overview.savingsFundsMinor, 'VND', { hidden: hideBalances })}
-                        </span>
-                      </>
-                    )}
-                    {netDebtMinor !== 0 && (
-                      <>
-                        {' · '}
-                        {isVi ? 'Công nợ: ' : 'IOUs: '}
-                        {formatMoney(netDebtMinor, 'VND', {
-                          hidden: hideBalances,
-                          showPlusSign: netDebtMinor > 0,
-                        })}
-                      </>
-                    )}
-                  </span>
-                )}
+              {/* Oversized Corner-Peeking Buddy (BAEMIN / Plopp Style) */}
+              <div className="pointer-events-none absolute -right-3 -bottom-4">
+                <GeometricBuddy
+                  shape={activeBuddy.shape}
+                  colorHex={activeBuddy.characterFillHex}
+                  accessory={activeBuddy.accessory}
+                  blush
+                  mood="happy"
+                  size={112}
+                />
               </div>
             </div>
 
@@ -485,8 +510,8 @@ export function AssetsAndDebtsView(): ReactElement {
           <Card className="space-y-3.5" data-testid="assets-savings-funds-section">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#10B981]/14 text-[#059669]">
-                  <PiggyBank className="h-4 w-4" />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#191919]/10 bg-[#FFFFFF] shadow-2xs">
+                  <GeometricBuddy shape="pentagon" pose="family" mood="happy" size={34} />
                 </span>
                 <div>
                   <h3 className="text-sm font-bold text-[var(--ink-primary)]">

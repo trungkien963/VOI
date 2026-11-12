@@ -133,7 +133,6 @@ describe('Milestone 0: Clean Architecture, Multi-Language (EN Default + VI) & Mo
 
     // 1. Default language is English ('en')
     expect(document.documentElement.lang).toBe('en');
-    expect(screen.getByTestId('language-toggle-btn')).toHaveTextContent('EN');
     expect(screen.getByText(en.hero.todaySpentLabel)).toBeInTheDocument();
     expect(screen.getByText(en.flows.cost)).toBeInTheDocument();
     expect(screen.getByText(en.flows.earn)).toBeInTheDocument();
@@ -157,10 +156,14 @@ describe('Milestone 0: Clean Architecture, Multi-Language (EN Default + VI) & Mo
     expect(screen.getByTestId('calculator-evaluated-amount')).toHaveTextContent('120.000đ');
     fireEvent.click(screen.getByRole('button', { name: en.quickAddModal.closeBtn }));
 
-    // 3. Toggle language from EN -> VI via Header Quick Toggle
-    fireEvent.click(screen.getByTestId('language-toggle-btn'));
+    // 3. Switch language from EN -> VI inside Settings -> Appearance
+    fireEvent.click(screen.getByRole('button', { name: en.nav.settings }));
+    fireEvent.click(screen.getByTestId('settings-category-appearance'));
+    fireEvent.click(screen.getByRole('tab', { name: en.settings.langVi }));
     expect(document.documentElement.lang).toBe('vi');
-    expect(screen.getByTestId('language-toggle-btn')).toHaveTextContent('VI');
+
+    // Return to Home and verify Vietnamese labels
+    fireEvent.click(screen.getByRole('button', { name: vi.nav.home }));
     expect(screen.getByText(vi.hero.todaySpentLabel)).toBeInTheDocument();
     expect(screen.getByText(vi.flows.cost)).toBeInTheDocument();
     expect(screen.getByText(vi.flows.earn)).toBeInTheDocument();

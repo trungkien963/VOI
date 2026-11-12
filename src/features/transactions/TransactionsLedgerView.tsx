@@ -26,7 +26,9 @@ import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { EmptyStateCard } from '../../shared/ui/EmptyStateCard';
 import { CategoryIcon } from '../../shared/ui/CategoryIcon';
+import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 
 type LedgerMode = 'list' | 'calendar';
 type TypeFilter = 'all' | 'expense' | 'income' | 'transfer';
@@ -60,9 +62,10 @@ export function TransactionsLedgerView(): ReactElement {
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState<string>(() => todayIso.slice(0, 7));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(todayIso);
-  const { hideBalances, openEditTransaction, openQuickAdd } = useUiStore();
+  const { hideBalances, avatarId, openEditTransaction, openQuickAdd } = useUiStore();
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const activeBuddy = getAvatarPresetMeta(avatarId);
 
   const transactions = useLiveQuery(
     async () => {
@@ -192,11 +195,18 @@ export function TransactionsLedgerView(): ReactElement {
     .filter(
       (tx) =>
         tx.txn_date.startsWith(calendarMonth) &&
-        (tx.type === 'expense' || tx.type === 'credit_card_spend' || tx.type === 'debt_lend'),
+        (tx.type === 'expense' || tx.type === 'credit_card_spend'),
     )
     .reduce((acc, tx) => acc + Math.abs(tx.amount_minor), 0);
+  const monthLentMinor = filteredTransactions
+    .filter((tx) => tx.txn_date.startsWith(calendarMonth) && tx.type === 'debt_lend')
+    .reduce((acc, tx) => acc + Math.abs(tx.amount_minor), 0);
   const monthIncomeMinor = filteredTransactions
-    .filter((tx) => tx.txn_date.startsWith(calendarMonth) && tx.type === 'income')
+    .filter(
+      (tx) =>
+        tx.txn_date.startsWith(calendarMonth) &&
+        (tx.type === 'income' || tx.type === 'credit_card_refund'),
+    )
     .reduce((acc, tx) => acc + Math.abs(tx.amount_minor), 0);
 
   const selectedDayGroup = groupMapByDate.get(selectedCalendarDate) ?? {
@@ -208,16 +218,7 @@ export function TransactionsLedgerView(): ReactElement {
   };
 
   const handleDelete = async (txId: string): Promise<void> => {
-    const targetTx = transactions.find((tx) => tx.id === txId);
     await transactionRepository.softDeleteTransactionAtomic(txId);
-    if (targetTx?.group_id && targetTx.type === 'expense') {
-      const companions = transactions.filter(
-        (tx) => tx.group_id === targetTx.group_id && tx.id !== txId,
-      );
-      for (const comp of companions) {
-        await transactionRepository.softDeleteTransactionAtomic(comp.id);
-      }
-    }
     setLastDeletedTxId(txId);
   };
 
@@ -389,18 +390,68 @@ export function TransactionsLedgerView(): ReactElement {
 
   return (
     <div className="space-y-3.5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-[var(--ink-primary)]">{t.transactionsTab.title}</h2>
-        <SegmentedControl<LedgerMode>
-          ariaLabel={t.transactionsTab.viewModeAria}
-          size="sm"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { id: 'list', label: t.ledgerView.modeList },
-            { id: 'calendar', label: t.ledgerView.modeCalendar },
-          ]}
-        />
+      {/* Companion Hero Banner for Transactions Screen with Oversized Corner-Peeking VOI */}
+      <div
+        style={{ backgroundColor: activeBuddy.cardBgHex }}
+        className="relative overflow-hidden rounded-[26px] border border-[#191919]/12 p-4 pr-24 text-[#191919] shadow-2xs"
+      >
+        <div className="pointer-events-none absolute -right-7 -bottom-7 h-32 w-32 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+        <div className="relative z-10 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-black text-[#191919]">{t.transactionsTab.title}</h2>
+              <p className="text-[11px] font-bold text-[#191919]/75">
+                {isVi
+                  ? `Tháng ${calendarMonth} · ${filteredTransactions.length} giao dịch`
+                  : `${calendarMonth} · ${filteredTransactions.length} transactions`}
+              </p>
+            </div>
+            <SegmentedControl<LedgerMode>
+              ariaLabel={t.transactionsTab.viewModeAria}
+              size="sm"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { id: 'list', label: t.ledgerView.modeList },
+                { id: 'calendar', label: t.ledgerView.modeCalendar },
+              ]}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#FFFFFF]/90 px-2.5 py-0.5 text-[11px] font-extrabold text-[#191919] tabular-nums shadow-2xs">
+              <span>{isVi ? 'Chi:' : 'Out:'}</span>
+              <strong>-{formatMoney(monthExpenseMinor, 'VND', { hidden: hideBalances })}</strong>
+            </span>
+            {monthLentMinor > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#191919] px-2.5 py-0.5 text-[11px] font-extrabold text-[#FAFAFA] tabular-nums shadow-2xs">
+                <span>{isVi ? 'Ứng hộ:' : 'Lent:'}</span>
+                <strong>+{formatMoney(monthLentMinor, 'VND', { hidden: hideBalances })}</strong>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#FFFFFF]/90 px-2.5 py-0.5 text-[11px] font-extrabold text-[#059669] tabular-nums shadow-2xs">
+              <span>{isVi ? 'Thu:' : 'In:'}</span>
+              <strong>+{formatMoney(monthIncomeMinor, 'VND', { hidden: hideBalances })}</strong>
+            </span>
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute -right-2 -bottom-3 z-10">
+          <GeometricBuddy
+            shape={activeBuddy.shape}
+            pose={
+              typeFilter === 'income'
+                ? 'coin-toss'
+                : typeFilter === 'expense'
+                  ? 'memory'
+                  : typeFilter === 'transfer'
+                    ? 'super'
+                    : undefined
+            }
+            mood="happy"
+            size={108}
+          />
+        </div>
       </div>
 
       {/* Instant Search & Type Filter Bar (Section 8.4) */}
@@ -468,7 +519,8 @@ export function TransactionsLedgerView(): ReactElement {
                         {isVi ? 'Chi riêng: ' : 'Own: '}
                         {formatMoney(-group.dayOwnExpenseMinor, 'VND', {
                           hidden: hideBalances,
-                        })} · {isVi ? 'Trả hộ: ' : 'Lent: '}
+                        })}{' '}
+                        · {isVi ? 'Trả hộ: ' : 'Lent: '}
                         {formatMoney(-group.dayLentMinor, 'VND', { hidden: hideBalances })}
                       </p>
                     )}

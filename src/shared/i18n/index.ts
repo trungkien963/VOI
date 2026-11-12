@@ -41,6 +41,28 @@ export function getCategoryDisplayName(
   return dict.categories[category.slug] ?? category.name;
 }
 
+export function getAccountDisplayName(
+  item: { id?: string; name: string },
+  locale: SupportedLocale,
+): string {
+  if (locale !== 'vi') return item.name;
+  if (
+    item.name === 'Main Bank (VCB)' ||
+    item.name === 'Main Bank (VCB) (VND)' ||
+    item.name === 'Main Bank' ||
+    item.name === 'Main Bank (VND)'
+  ) {
+    return 'Tài khoản Ngân hàng';
+  }
+  if (item.name === 'Cash Wallet' || item.name === 'Cash Wallet (VND)') {
+    return 'Ví tiền mặt';
+  }
+  if (item.name === 'MoMo Wallet' || item.name === 'MoMo Wallet (VND)') {
+    return 'Ví điện tử';
+  }
+  return item.name;
+}
+
 export function formatVnd(amountMinor: number, hidden = false): string {
   if (hidden) {
     return '••••••đ';

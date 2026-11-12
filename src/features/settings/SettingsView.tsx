@@ -43,6 +43,7 @@ import { THEME_LIST } from '../../shared/theme/themes';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 import { AuthAndAccountCard } from '../auth/AuthAndAccountCard';
 import { CustomTagsAndCategoriesBox } from './CustomTagsAndCategoriesBox';
@@ -80,6 +81,11 @@ function getThemeCopy(
       return { name: dict.themes.flamingoName, description: dict.themes.flamingoDesc };
     case 'sunny':
       return { name: dict.themes.sunnyName, description: dict.themes.sunnyDesc };
+    case 'rose':
+      return {
+        name: 'Blossom Pink',
+        description: 'Mây Hào Hứng · Không lo cuối tháng',
+      };
   }
 }
 
@@ -102,6 +108,7 @@ function getUnlockRequirementLabel(
 export function SettingsView(): ReactElement {
   const {
     themeId,
+    avatarId,
     colorMode,
     streakDays,
     maxStreakDays,
@@ -121,6 +128,7 @@ export function SettingsView(): ReactElement {
   const { t, locale, setLocale } = useTranslation();
   const isVi = locale === 'vi';
   const copy = M6_COPY[locale];
+  const activeBuddy = getAvatarPresetMeta(avatarId);
 
   const [openSection, setOpenSection] = useState<SettingsSectionId | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -312,23 +320,31 @@ export function SettingsView(): ReactElement {
 
   return (
     <div className="space-y-3" aria-labelledby="settings-heading">
-      <Card>
-        <Card.Header>
+      <div
+        style={{ backgroundColor: activeBuddy.cardBgHex }}
+        className="relative overflow-hidden rounded-[26px] border border-[#191919]/12 p-4 pr-24 text-[#191919] shadow-2xs"
+      >
+        <div className="pointer-events-none absolute -right-7 -bottom-7 h-32 w-32 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 id="settings-heading" className="text-base font-bold text-[var(--ink-primary)]">
+            <h2 id="settings-heading" className="text-base font-black text-[#191919]">
               {t.settings.title}
             </h2>
-            <p className="text-xs text-[var(--ink-secondary)]">
+            <p className="text-xs font-semibold text-[#191919]/75">
               {isVi
                 ? 'Chọn từng danh mục bên dưới để mở cài đặt chi tiết.'
                 : 'Tap any category below to expand its settings.'}
             </p>
           </div>
-          <Button variant="outline" size="xs" onClick={() => setActiveTab('home')}>
+          <Button variant="ink" size="xs" onClick={() => setActiveTab('home')}>
             {t.settings.backHomeBtn}
           </Button>
-        </Card.Header>
-      </Card>
+        </div>
+
+        <div className="pointer-events-none absolute -right-2 -bottom-3 z-10">
+          <GeometricBuddy shape={activeBuddy.shape} mood="happy" size={104} />
+        </div>
+      </div>
 
       {statusNotice && (
         <div

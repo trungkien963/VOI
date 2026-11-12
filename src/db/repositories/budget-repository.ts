@@ -42,6 +42,13 @@ export interface SetupOrConfirmSalaryInput {
   pocketId: string | null;
   referenceDateIso: string;
   confirmForCurrentMonth: boolean;
+  /**
+   * When true (and `confirmForCurrentMonth` is false), indicates that this month's salary is
+   * already reflected in the user's opening wallet balance (e.g. during Onboarding Step 1).
+   * The rule's `last_run_date` is set to `referenceDateIso` and `next_run_date` is scheduled
+   * for next month's payday so it never double-counts money on HomeView!
+   */
+  alreadyIncludedInOpeningBalance?: boolean;
   title?: string;
 }
 
@@ -351,6 +358,20 @@ export class BudgetRepository extends BaseRepository<Budget> {
         last_run_date: cleanRefDate,
         next_run_date: nextMonthDate,
         occurrences_done: (rule.occurrences_done ?? 0) + 1,
+        updated_at: nowIso,
+      };
+      await recurringRepository.upsertAtomic(rule);
+    } else if (input.alreadyIncludedInOpeningBalance && amountMinor > 0) {
+      const nextMonthDate = computeNextRunDateAfter(thisMonthRunDate, {
+        frequency: 'monthly',
+        interval_count: 1,
+        day_of_month: payday,
+      });
+
+      rule = {
+        ...rule,
+        last_run_date: cleanRefDate,
+        next_run_date: nextMonthDate,
         updated_at: nowIso,
       };
       await recurringRepository.upsertAtomic(rule);

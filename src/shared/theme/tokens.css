@@ -5,72 +5,92 @@
 :root {
   color-scheme: light dark;
 
-  /* 80% Warm Editorial Cream Canvas & Pure White Cards */
-  --bg-canvas: light-dark(#f8f6f0, #131312);
-  --bg-card: light-dark(#ffffff, #1d1d1b);
-  --bg-subtle: light-dark(#f4f1e8, #272724);
-  --border-hairline: light-dark(#ebe6d8, #30302c);
-  --border-strong: light-dark(#d8d1c0, #42423d);
+  /* Pantone Palette Base Surfaces (WHITE #FAFAFA & BLACK #191919) */
+  --bg-canvas: light-dark(#f5f3ee, #131313);
+  --bg-card: light-dark(#fafafa, #1e1e1e);
+  --bg-subtle: light-dark(#efece4, #282828);
+  --border-hairline: light-dark(#e4dfd3, #333333);
+  --border-strong: light-dark(#cfc8b8, #474747);
 
-  /* 10% Editorial Deep Ink & Typography */
-  --ink-primary: light-dark(#18181b, #f6f5f0);
-  --ink-secondary: light-dark(#57554f, #a8a59e);
-  --ink-muted: light-dark(#8c887f, #73706a);
-  --dock-bg: #18181b;
-  --dock-border: #2c2c2a;
+  /* Pantone 419 C Deep Black (#191919) & Typography */
+  --ink-primary: light-dark(#191919, #fafafa);
+  --ink-secondary: light-dark(#57544e, #a8a59e);
+  --ink-muted: light-dark(#8a867e, #75726b);
+  --dock-bg: #191919;
+  --dock-border: #2e2e2e;
   --dock-text: #a6a39b;
 
-  /* 10% Warm Editorial Pop Semantic Palette (8 Shapes) */
-  --pop-coral: #ff6b35; /* Triangle: Cost / Chi tiêu */
-  --pop-mint: #10b981; /* Square: Earn / Thu nhập */
-  --pop-lavender: #8b5cf6; /* Circle: Borrow & Lend / Sổ nợ */
-  --pop-teal: #0d9488; /* Diamond: Transfer / Chuyển khoản */
-  --pop-honey: #ffb703; /* Arch: Savings & Goals / Tiết kiệm */
-  --pop-cobalt: #3b82f6; /* Hexagon: Bank & Fixed Bills */
-  --pop-rose: #f472b6; /* Pentagon: Credit Card & Installment */
-  --pop-blossom: #fb7185; /* Rainbow: Rewards & Cashback */
+  /* Pantone Vibrant + Soft Pastel Pairs */
+  --pantone-lilac: #bf9bde;
+  --pantone-soft-lilac: #d7c3f8;
+  --pantone-orange: #ff7a1a;
+  --pantone-soft-orange: #f7d1c3;
+  --pantone-yellow: #f2d147;
+  --pantone-soft-yellow: #f7f296;
+  --pantone-pink: #ef6ea5;
+  --pantone-soft-pink: #f5c2d7;
+  --pantone-blue: #5e89ed;
+  --pantone-soft-blue: #bcdbeb;
+  --pantone-green: #52c470;
+  --pantone-soft-green: #b7edb8;
 
-  /* Active Theme Pop Accent (Default: Coral Cost Pop) */
-  --accent-pop: #ff6b35;
+  /* Semantic Aliases Mapped to Pantone Swatches */
+  --pop-coral: #ff7a1a; /* Orange 1505 C: Cost / Chi tiêu */
+  --pop-mint: #52c470; /* Green 360 C: Earn / Thu nhập */
+  --pop-lavender: #bf9bde; /* Lilac 2567 C: Borrow & Lend / Sổ nợ */
+  --pop-teal: #5e89ed; /* Blue 2718 C: Transfer / Chuyển khoản */
+  --pop-honey: #f2d147; /* Yellow 129 C: Savings & Goals / Tiết kiệm */
+  --pop-cobalt: #5e89ed; /* Blue 2718 C: Bank & Fixed Bills */
+  --pop-rose: #ef6ea5; /* Pink 204 C: Credit Card & Installment */
+  --pop-blossom: #ef6ea5; /* Pink 204 C: Rewards & Cashback */
+
+  /* Active Theme Pop Accent (Default: Pantone Orange 1505 C) */
+  --accent-pop: #ff7a1a;
   --accent-pop-fg: #ffffff;
-  --accent-pop-soft: light-dark(#fff1eb, #2d1a12);
+  --accent-pop-soft: light-dark(#f7d1c3, #332018);
 
   /* Radii & Shadows */
   --radius-card: 24px;
   --radius-pill: 9999px;
-  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.03), 0 10px 28px -8px rgba(24, 24, 27, 0.05);
-  --shadow-dock: 0 12px 32px -6px rgba(24, 24, 27, 0.26), 0 2px 8px rgba(24, 24, 27, 0.14);
+  --shadow-card: 0 1px 2px rgba(25, 25, 25, 0.03), 0 10px 28px -8px rgba(25, 25, 25, 0.05);
+  --shadow-dock: 0 12px 32px -6px rgba(25, 25, 25, 0.28), 0 2px 8px rgba(25, 25, 25, 0.14);
 }
 
-/* Theme Preset Overrides */
+/* Theme Preset Overrides (Pantone Vibrants & Soft Pastels) */
 :root[data-theme='pop'] {
-  --accent-pop: #ff6b35;
+  --accent-pop: #ff7a1a;
   --accent-pop-fg: #ffffff;
-  --accent-pop-soft: light-dark(#fff1eb, #2d1a12);
+  --accent-pop-soft: light-dark(#f7d1c3, #332018);
 }
 
 :root[data-theme='cobalt'] {
-  --accent-pop: #3b82f6;
+  --accent-pop: #5e89ed;
   --accent-pop-fg: #ffffff;
-  --accent-pop-soft: light-dark(#eff6ff, #132038);
+  --accent-pop-soft: light-dark(#bcdbeb, #182638);
 }
 
 :root[data-theme='matcha'] {
-  --accent-pop: #10b981;
-  --accent-pop-fg: #ffffff;
-  --accent-pop-soft: light-dark(#ecfdf5, #0f291e);
+  --accent-pop: #52c470;
+  --accent-pop-fg: #191919;
+  --accent-pop-soft: light-dark(#b7edb8, #142b1b);
 }
 
 :root[data-theme='flamingo'] {
-  --accent-pop: #8b5cf6;
-  --accent-pop-fg: #ffffff;
-  --accent-pop-soft: light-dark(#f5f3ff, #231838);
+  --accent-pop: #bf9bde;
+  --accent-pop-fg: #191919;
+  --accent-pop-soft: light-dark(#d7c3f8, #261d36);
 }
 
 :root[data-theme='sunny'] {
-  --accent-pop: #ffb703;
-  --accent-pop-fg: #18181b;
-  --accent-pop-soft: light-dark(#fffbeb, #2c2208);
+  --accent-pop: #f2d147;
+  --accent-pop-fg: #191919;
+  --accent-pop-soft: light-dark(#f7f296, #2e2810);
+}
+
+:root[data-theme='rose'] {
+  --accent-pop: #ef6ea5;
+  --accent-pop-fg: #ffffff;
+  --accent-pop-soft: light-dark(#f5c2d7, #361826);
 }
 
 @media (prefers-color-scheme: dark) {

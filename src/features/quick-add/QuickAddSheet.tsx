@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
-import { Sparkles, Users } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useUiStore, type QuickAddFlowKind } from '../../app/ui-store';
 import { DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
@@ -7,7 +7,10 @@ import { debtRepository } from '../../db/repositories/debt-repository';
 import { merchantAliasRepository } from '../../db/repositories/merchant-alias-repository';
 import { tagRepository } from '../../db/repositories/tag-repository';
 import { transactionRepository } from '../../db/repositories/transaction-repository';
-import { DEFAULT_SYSTEM_CATEGORIES } from '../../domain/categories/default-categories';
+import {
+  mergeSystemAndLiveCategories,
+  SYSTEM_CATEGORY_IDS,
+} from '../../domain/categories/default-categories';
 import {
   computeImpliedFxRate,
   formatMoney,
@@ -17,15 +20,60 @@ import {
 } from '../../domain/money/currency';
 import { parseQuickInput } from '../../domain/quick-parser/parser';
 import type { Category, CategoryKind } from '../../domain/types/entities';
-import { getCategoryDisplayName, useTranslation } from '../../shared/i18n';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
+import { getAccountDisplayName, getCategoryDisplayName, useTranslation } from '../../shared/i18n';
 import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { CalculatorKeypad } from '../../shared/ui/CalculatorKeypad';
 import { CategoryGridPicker } from '../../shared/ui/CategoryGridPicker';
+import { CategoryIcon } from '../../shared/ui/CategoryIcon';
+import { VoiFlowIcon } from '../../shared/ui/VoiFlowIcon';
 import { VoiLogo } from '../../shared/ui/VoiLogo';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 
-const SMART_CHIPS_EN = ['☕ Coffee 35k', '🍜 Lunch 55k', '🛵 Grab 40k', '🧋 Boba 45k'];
-const SMART_CHIPS_VI = ['☕ Cafe 35k', '🍜 Ăn trưa 55k', '🛵 Grab 40k', '🧋 Trà sữa 45k'];
+const EXPENSE_CHIPS_EN = [
+  '☕ Coffee 35k',
+  '🍜 Lunch 55k',
+  '🛵 Grab 40k',
+  '🧋 Boba 45k',
+  '⛽ Gas 70k',
+  '🛒 Grocery 150k',
+];
+const EXPENSE_CHIPS_VI = [
+  '☕ Cafe 35k',
+  '🍜 Ăn trưa 55k',
+  '🛵 Grab 40k',
+  '🧋 Trà sữa 45k',
+  '⛽ Đổ xăng 70k',
+  '🛒 Siêu thị 150k',
+];
+
+const INCOME_CHIPS_EN = [
+  '💰 Salary 15m',
+  '🎁 Bonus 2m',
+  '💻 Freelance 3m',
+  '📈 Interest 500k',
+  '🧧 Gift 1m',
+];
+const INCOME_CHIPS_VI = [
+  '💰 Lương 15tr',
+  '🎁 Thưởng 2tr',
+  '💻 Freelance 3tr',
+  '📈 Lãi tiết kiệm 500k',
+  '🧧 Được tặng 1tr',
+];
+
+const TRANSFER_CHIPS_EN = [
+  '💵 Withdraw ATM 2m',
+  '📱 Top up MoMo 500k',
+  '💳 Pay credit card 5m',
+  '🐷 Save to fund 3m',
+];
+const TRANSFER_CHIPS_VI = [
+  '💵 Rút tiền mặt 2tr',
+  '📱 Nạp MoMo 500k',
+  '💳 Trả thẻ tín dụng 5tr',
+  '🐷 Gửi tiết kiệm 3tr',
+];
 
 export function QuickAddSheet(): ReactElement {
   const {
@@ -33,13 +81,17 @@ export function QuickAddSheet(): ReactElement {
     quickAddDefaultKind,
     quickAddDefaultDateIso,
     quickAddDefaultSplitMode,
+    quickAddPresetText,
     editingTransactionId,
     thousandsInputMode,
+    avatarId,
     closeQuickAdd,
     clearNoSpendDate,
+    triggerCelebration,
   } = useUiStore();
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const activeBuddy = getAvatarPresetMeta(avatarId);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const livePockets = useLiveQuery(
@@ -63,15 +115,7 @@ export function QuickAddSheet(): ReactElement {
   ).slice(0, 8);
 
   const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
-  const allCategories: ReadonlyArray<Category> =
-    liveCategories.length > 0
-      ? [
-          ...DEFAULT_SYSTEM_CATEGORIES,
-          ...liveCategories.filter(
-            (c) => !DEFAULT_SYSTEM_CATEGORIES.some((sys) => sys.id === c.id),
-          ),
-        ]
-      : DEFAULT_SYSTEM_CATEGORIES;
+  const allCategories: ReadonlyArray<Category> = mergeSystemAndLiveCategories(liveCategories);
 
   const expenseCategories = allCategories.filter(
     (c) => c.kind === 'expense' && c.slug !== 'unknown-expense' && !c.archived_at,
@@ -112,12 +156,23 @@ export function QuickAddSheet(): ReactElement {
     if (defaultCats[0]) {
       setSelectedCategoryId(defaultCats[0].id);
     }
+    if (quickAddPresetText) {
+      setQuickInputText(quickAddPresetText);
+      const parsed = parseQuickInput(quickAddPresetText, { thousandsInputMode, learnedAliases });
+      if (parsed.amountMinor !== null && parsed.amountMinor > 0) {
+        setExpression(String(parsed.amountMinor));
+      }
+      if (parsed.categoryId) {
+        setSelectedCategoryId(parsed.categoryId);
+      }
+    }
   }, [
     isQuickAddOpen,
     editingTransactionId,
     quickAddDefaultKind,
     quickAddDefaultDateIso,
     quickAddDefaultSplitMode,
+    quickAddPresetText,
   ]);
 
   // Load transaction + lines when editing an existing transaction
@@ -151,20 +206,32 @@ export function QuickAddSheet(): ReactElement {
   }, [editingTransactionId, todayIso]);
 
   const parsedPreview = quickInputText.trim()
-    ? parseQuickInput(quickInputText, { thousandsInputMode, learnedAliases })
+    ? parseQuickInput(quickInputText, {
+        thousandsInputMode,
+        learnedAliases,
+        categories: allCategories,
+        preferredKind: kind,
+      })
     : null;
 
   const handleQuickInputChange = (val: string): void => {
     setQuickInputText(val);
     if (!val.trim()) return;
-    const parsed = parseQuickInput(val, { thousandsInputMode, learnedAliases });
+    const parsed = parseQuickInput(val, {
+      thousandsInputMode,
+      learnedAliases,
+      categories: allCategories,
+      preferredKind: kind,
+    });
     if (parsed.amountMinor !== null && parsed.amountMinor > 0) {
       setExpression(String(parsed.amountMinor));
     }
-    if (parsed.type === 'income' || parsed.type === 'transfer' || parsed.type === 'expense') {
+    // Only auto-switch tab if the user is on the default 'expense' tab and typed an explicit income/transfer command
+    // Never kick the user out of 'income' or 'transfer' back to 'expense' when typing notes!
+    if (kind === 'expense' && (parsed.type === 'income' || parsed.type === 'transfer')) {
       setKind(parsed.type);
     }
-    if (parsed.categoryId) {
+    if (parsed.categoryId && parsed.categoryMatchedByKeyword) {
       setSelectedCategoryId(parsed.categoryId);
     }
   };
@@ -281,10 +348,23 @@ export function QuickAddSheet(): ReactElement {
         currency: srcCurrency,
         totalPaidMinor: finalMinor,
         ownExpenseMinor: ownMinor,
-        categoryId: selectedCategoryId ?? 'cat-eating-out',
+        categoryId: selectedCategoryId ?? SYSTEM_CATEGORY_IDS.foodDining,
         note: cleanNote ?? (isVi ? 'Chia hoá đơn nhóm' : 'Group bill split'),
         occurredAt,
         shares,
+      });
+
+      const splitFormatted = formatMoney(finalMinor, srcCurrency);
+      triggerCelebration({
+        kind: 'transaction_saved',
+        variant: 'toast',
+        flowMascot: 'lend-borrow',
+        title: isVi
+          ? `Đã chia bill ${splitFormatted} (${splitFriendNames.length + 1} người)`
+          : `Split bill ${splitFormatted} (${splitFriendNames.length + 1} ways)`,
+        subtitle: isVi
+          ? `Phần bạn: ${formatMoney(ownMinor, srcCurrency)} · Ứng bạn bè: ${formatMoney(remainingLent, srcCurrency)}`
+          : `Yours: ${formatMoney(ownMinor, srcCurrency)} · Lent: ${formatMoney(remainingLent, srcCurrency)}`,
       });
 
       clearNoSpendDate(chosenDateIso);
@@ -321,6 +401,12 @@ export function QuickAddSheet(): ReactElement {
       occurredAt,
     };
 
+    const existingRealTxsCount = editingTransactionId
+      ? 1
+      : (await localDb.transactions.toArray()).filter(
+          (tx) => tx.type !== 'opening_balance' && tx.voided_at === null && tx.status !== 'void',
+        ).length;
+
     if (editingTransactionId) {
       await transactionRepository.updateTransactionAtomic(payload);
     } else {
@@ -341,6 +427,39 @@ export function QuickAddSheet(): ReactElement {
         accountId: sourcePocket.account_id,
       });
     }
+
+    const formattedAmt = formatMoney(finalMinor, srcCurrency);
+    const chosenCat = allCategories.find((c) => c.id === selectedCategoryId);
+    const labelText =
+      cleanNote || (chosenCat ? getCategoryDisplayName(chosenCat, t) : t.flows.cost);
+    const pocketDisplayName = getAccountDisplayName(sourcePocket, locale);
+
+    const savedFlowMascot =
+      kind === 'income' ? 'income' : kind === 'transfer' ? 'transfer' : 'expense';
+
+    if (!editingTransactionId && existingRealTxsCount === 0) {
+      triggerCelebration({
+        kind: 'first_transaction',
+        variant: 'modal',
+        flowMascot: savedFlowMascot,
+        amountText: `${kind === 'income' ? '+' : '-'}${formattedAmt} · ${labelText}`,
+        title: isVi ? 'Chúc mừng giao dịch đầu tiên! 🎉' : 'Congrats on your first log! 🎉',
+        subtitle: isVi
+          ? `Đã ghi nhận vào ${pocketDisplayName}. Bạn vừa mở khóa Chuỗi kỷ luật 🔥 Ngày 1!`
+          : `Saved to ${pocketDisplayName}. You just unlocked your 🔥 Day 1 Streak!`,
+      });
+    } else {
+      triggerCelebration({
+        kind: 'transaction_saved',
+        variant: 'toast',
+        flowMascot: savedFlowMascot,
+        title: isVi
+          ? `Đã lưu ${kind === 'income' ? '+' : kind === 'expense' ? '-' : ''}${formattedAmt} (${labelText})`
+          : `Saved ${kind === 'income' ? '+' : kind === 'expense' ? '-' : ''}${formattedAmt} (${labelText})`,
+        subtitle: isVi ? `Tài khoản: ${pocketDisplayName}` : `Wallet: ${pocketDisplayName}`,
+      });
+    }
+
     handleClose();
   };
 
@@ -368,8 +487,39 @@ export function QuickAddSheet(): ReactElement {
         )
       : null;
 
-  const smartChips = locale === 'vi' ? SMART_CHIPS_VI : SMART_CHIPS_EN;
+  const smartChips =
+    kind === 'income'
+      ? isVi
+        ? INCOME_CHIPS_VI
+        : INCOME_CHIPS_EN
+      : kind === 'transfer'
+        ? isVi
+          ? TRANSFER_CHIPS_VI
+          : TRANSFER_CHIPS_EN
+        : isVi
+          ? EXPENSE_CHIPS_VI
+          : EXPENSE_CHIPS_EN;
+
+  const smartInputPlaceholder =
+    kind === 'income'
+      ? isVi
+        ? 'VD: Lương tháng 15tr, Thưởng dự án 2tr, Freelance...'
+        : 'e.g. Monthly salary 15m, Project bonus 2m, Freelance...'
+      : kind === 'transfer'
+        ? isVi
+          ? 'VD: Rút tiền mặt 2tr, Nạp ví MoMo 500k, Trả thẻ...'
+          : 'e.g. Withdraw ATM 2m, Top up MoMo 500k...'
+        : t.quickAddModal.placeholder;
+
   const matchedCat = allCategories.find((c) => c.id === selectedCategoryId);
+  const activeFlowMascot =
+    kind === 'income'
+      ? 'income'
+      : kind === 'transfer'
+        ? 'transfer'
+        : isSplitBill
+          ? 'lend-borrow'
+          : 'expense';
 
   return (
     <BottomSheet
@@ -408,7 +558,7 @@ export function QuickAddSheet(): ReactElement {
             >
               {pockets.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {getAccountDisplayName(p, locale)}
                 </option>
               ))}
             </select>
@@ -429,7 +579,7 @@ export function QuickAddSheet(): ReactElement {
                   .filter((p) => p.id !== sourcePocket?.id)
                   .map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}
+                      {getAccountDisplayName(p, locale)}
                     </option>
                   ))}
               </select>
@@ -460,7 +610,7 @@ export function QuickAddSheet(): ReactElement {
                   : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
               }`}
             >
-              <Users className="h-3.5 w-3.5" />
+              <VoiFlowIcon variant="lend-borrow" size={16} />
               <span>{isVi ? 'Chia bill' : 'Split'}</span>
             </button>
           )}
@@ -600,24 +750,76 @@ export function QuickAddSheet(): ReactElement {
           </div>
         )}
 
-        <div>
-          <input
-            type="text"
-            value={quickInputText}
-            onChange={(e) => handleQuickInputChange(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={t.quickAddModal.placeholder}
-            className="w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-medium text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:border-[#141413] focus:outline-none"
-          />
+        {/* Prominent Smart Content / Note Input Card */}
+        <div
+          style={{ borderColor: `${activeBuddy.characterFillHex}55` }}
+          className="space-y-2 rounded-2xl border-2 bg-[var(--bg-card)] p-3 shadow-2xs"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor="quick-add-smart-note-input"
+              className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide text-[var(--ink-primary)] uppercase"
+            >
+              <VoiFlowIcon
+                variant={
+                  kind === 'income'
+                    ? 'income'
+                    : kind === 'transfer'
+                      ? 'transfer'
+                      : isSplitBill
+                        ? 'lend-borrow'
+                        : 'expense'
+                }
+                size={20}
+              />
+              <span>{isVi ? 'Nội dung / Ghi nhanh 1 dòng' : 'Smart Note / Quick Input'}</span>
+            </label>
+
+            {kind !== 'transfer' && matchedCat && (
+              <span
+                style={{ backgroundColor: activeBuddy.cardBgHex }}
+                className="inline-flex max-w-[52%] items-center gap-1 rounded-full border border-[#191919]/15 px-2.5 py-0.5 text-[10px] font-extrabold text-[#191919]"
+              >
+                <CategoryIcon slug={matchedCat.slug} colorHex={matchedCat.color_hex} size="xs" />
+                <span className="truncate">
+                  {isVi ? 'Mục: ' : 'Cat: '}
+                  {getCategoryDisplayName(matchedCat, t)}
+                </span>
+              </span>
+            )}
+          </div>
+
+          <div className="relative">
+            <input
+              id="quick-add-smart-note-input"
+              data-testid="quick-add-smart-note-input"
+              type="text"
+              value={quickInputText}
+              onChange={(e) => handleQuickInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={smartInputPlaceholder}
+              className="w-full rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3.5 py-2.5 pr-9 text-base font-extrabold text-[var(--ink-primary)] placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
+            />
+            {quickInputText.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => setQuickInputText('')}
+                aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
+                className="absolute top-1/2 right-2.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
           {!quickInputText.trim() ? (
-            <div className="mt-1 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 whitespace-nowrap">
               {smartChips.map((chip) => (
                 <button
                   key={chip}
                   type="button"
                   onClick={() => handleQuickInputChange(chip.replace(/^[^\p{L}\p{N}]+\s*/u, ''))}
-                  className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
+                  className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[#191919] active:scale-95"
                 >
                   {chip}
                 </button>
@@ -627,24 +829,31 @@ export function QuickAddSheet(): ReactElement {
             parsedPreview && (
               <div
                 data-testid="quick-input-live-preview"
-                className="mt-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-primary)]"
+                style={{ backgroundColor: `${activeBuddy.cardBgHex}65` }}
+                className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#191919]/10 px-2.5 py-1.5 text-[11px] font-bold text-[#191919]"
               >
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#FF6B35]" />
+                <Sparkles
+                  className="h-3.5 w-3.5 shrink-0"
+                  style={{ color: activeBuddy.characterFillHex }}
+                />
                 <span>{t.quickAddModal.parsedPreviewLabel}:</span>
                 {parsedPreview.amountMinor !== null && (
-                  <strong className="font-extrabold text-[#FF6B35] tabular-nums">
+                  <strong
+                    className="font-black tabular-nums"
+                    style={{ color: activeBuddy.characterFillHex }}
+                  >
                     = {formatMoney(parsedPreview.amountMinor, parsedPreview.currency)}
                   </strong>
                 )}
                 {matchedCat && (
-                  <span className="rounded-full bg-[var(--bg-card)] px-2 py-0.5">
+                  <span className="rounded-full bg-[#FAFAFA] px-2 py-0.5 text-[10px] font-extrabold text-[#191919]">
                     {getCategoryDisplayName(matchedCat, t)}
                   </span>
                 )}
                 {parsedPreview.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full bg-[#3B82F6]/12 px-2 py-0.5 text-[#3B82F6]"
+                    className="rounded-full bg-[#191919] px-2 py-0.5 text-[10px] font-bold text-[#FAFAFA]"
                   >
                     #{tag}
                   </span>
@@ -666,6 +875,7 @@ export function QuickAddSheet(): ReactElement {
           expression={expression}
           onChangeExpression={setExpression}
           onSubmit={(amountMinor) => void handleSaveTransaction(amountMinor)}
+          flowMascot={activeFlowMascot}
           submitLabel={
             !editingTransactionId &&
             kind === 'expense' &&

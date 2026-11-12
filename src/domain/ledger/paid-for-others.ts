@@ -1,3 +1,4 @@
+import { SYSTEM_CATEGORY_IDS } from '../categories/default-categories';
 import type { CurrencyCode } from '../money/currency';
 import type { DebtItem, Transaction } from '../types/entities';
 import { buildTransactionBundle, type TransactionBundle } from './strategies';
@@ -150,17 +151,23 @@ export interface GroupClusterSummary {
 export function summarizeTransactionGroup(
   groupId: string,
   transactions: ReadonlyArray<
-    Pick<Transaction, 'group_id' | 'type' | 'amount_minor' | 'voided_at'>
+    Pick<Transaction, 'id' | 'group_id' | 'type' | 'amount_minor' | 'category_id' | 'voided_at'>
   >,
 ): GroupClusterSummary {
   const active = transactions.filter((t) => t.group_id === groupId && t.voided_at === null);
   let ownExpenseMinor = 0;
   let lentMinor = 0;
-  const feeMinor = 0;
+  let feeMinor = 0;
 
   for (const tx of active) {
     if (tx.type === 'expense') {
-      ownExpenseMinor += Math.abs(tx.amount_minor);
+      const isFeeRow =
+        tx.id?.endsWith('-fee') || tx.category_id === SYSTEM_CATEGORY_IDS.feesInterest;
+      if (isFeeRow) {
+        feeMinor += Math.abs(tx.amount_minor);
+      } else {
+        ownExpenseMinor += Math.abs(tx.amount_minor);
+      }
     } else if (tx.type === 'debt_lend') {
       lentMinor += Math.abs(tx.amount_minor);
     }

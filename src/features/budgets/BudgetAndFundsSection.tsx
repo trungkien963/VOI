@@ -7,7 +7,7 @@ import {
   computeSalaryMonthlyStatus,
   computeThreeTierFinancialOverview,
 } from '../../domain/budgets/budget-calculator';
-import { DEFAULT_SYSTEM_CATEGORIES } from '../../domain/categories/default-categories';
+import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import { computeNetWorth } from '../../domain/ledger/balance-calculator';
 import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
 import type { Category } from '../../domain/types/entities';
@@ -15,6 +15,10 @@ import { getCategoryDisplayName, useTranslation } from '../../shared/i18n';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { CategoryIcon } from '../../shared/ui/CategoryIcon';
+import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
+import { useUiStore } from '../../app/ui-store';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
+import { CustomTagsAndCategoriesBox } from '../settings/CustomTagsAndCategoriesBox';
 
 export interface BudgetAndFundsSectionProps {
   referenceDateIso?: string;
@@ -28,6 +32,8 @@ export function BudgetAndFundsSection({
 }: BudgetAndFundsSectionProps): ReactElement {
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const avatarId = useUiStore((s) => s.avatarId);
+  const activeBuddy = getAvatarPresetMeta(avatarId);
 
   const allAccounts = useLiveQuery(
     async () => {
@@ -49,15 +55,7 @@ export function BudgetAndFundsSection({
       : DEFAULT_STARTER_POCKETS;
 
   const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
-  const allCategories: ReadonlyArray<Category> =
-    liveCategories.length > 0
-      ? [
-          ...DEFAULT_SYSTEM_CATEGORIES,
-          ...liveCategories.filter(
-            (c) => !DEFAULT_SYSTEM_CATEGORIES.some((sys) => sys.id === c.id),
-          ),
-        ]
-      : DEFAULT_SYSTEM_CATEGORIES;
+  const allCategories: ReadonlyArray<Category> = mergeSystemAndLiveCategories(liveCategories);
 
   const parentExpenseCategories = allCategories.filter(
     (c) => c.kind === 'expense' && c.parent_id === null && c.archived_at === null,
@@ -94,6 +92,7 @@ export function BudgetAndFundsSection({
   });
 
   const [showAddCap, setShowAddCap] = useState(false);
+  const [showCategoryCustomizer, setShowCategoryCustomizer] = useState(false);
   const [selectedCapCategoryId, setSelectedCapCategoryId] = useState<string>(
     parentExpenseCategories[0]?.id ?? '10000000-0000-4000-8000-000000000001',
   );
@@ -124,45 +123,62 @@ export function BudgetAndFundsSection({
 
   return (
     <Card className="space-y-3.5">
-      {/* Clean Top Summary: Daily Safe-to-Spend + Month Progress Bar */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold text-[var(--ink-secondary)]">
-            {isVi
-              ? `Hạn mức chi tiêu · Được tiêu mỗi ngày (còn ${overview.daysRemaining} ngày)`
-              : `Spending Caps · Safe to spend daily (${overview.daysRemaining} days left)`}
-          </p>
-          <div className="mt-0.5 flex items-baseline gap-1.5">
-            <p
-              className="text-2xl font-extrabold tracking-tight text-[#2563EB] tabular-nums"
-              data-testid="daily-safe-to-spend-amount"
-            >
-              {formatMoney(overview.effectiveDailySafeMinor, 'VND', { hidden: hideBalances })}
+      {/* Companion Hero Stage with Oversized Corner-Peeking VOI */}
+      <div
+        style={{ backgroundColor: activeBuddy.cardBgHex }}
+        className="relative overflow-hidden rounded-[24px] border border-[#191919]/12 p-4 pr-24 text-[#191919]"
+      >
+        <div className="pointer-events-none absolute -right-7 -bottom-7 h-32 w-32 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-extrabold text-[#191919]/75">
+              {isVi
+                ? `Hạn mức chi tiêu · Được tiêu mỗi ngày (còn ${overview.daysRemaining} ngày)`
+                : `Spending Caps · Safe to spend daily (${overview.daysRemaining} days left)`}
             </p>
-            <span className="text-xs font-bold text-[var(--ink-secondary)]">
-              {isVi ? '/ ngày' : '/ day'}
-            </span>
+            <div className="mt-0.5 flex items-baseline gap-1.5">
+              <p
+                className="text-2xl font-black tracking-tight text-[#191919] tabular-nums"
+                data-testid="daily-safe-to-spend-amount"
+              >
+                {formatMoney(overview.effectiveDailySafeMinor, 'VND', { hidden: hideBalances })}
+              </p>
+              <span className="text-xs font-bold text-[#191919]/75">
+                {isVi ? '/ ngày' : '/ day'}
+              </span>
+            </div>
           </div>
+
+          <Button
+            variant={showAddCap ? 'outline' : 'ink'}
+            size="xs"
+            className="shrink-0"
+            onClick={() => setShowAddCap((v) => !v)}
+          >
+            {showAddCap ? (
+              <>
+                <X className="h-3.5 w-3.5" />
+                <span>{isVi ? 'Đóng' : 'Close'}</span>
+              </>
+            ) : (
+              <>
+                <Plus className="h-3.5 w-3.5" />
+                <span>{isVi ? 'Đặt trần mục' : 'Add Cap'}</span>
+              </>
+            )}
+          </Button>
         </div>
 
-        <Button
-          variant={showAddCap ? 'outline' : 'subtle'}
-          size="xs"
-          className="shrink-0"
-          onClick={() => setShowAddCap((v) => !v)}
-        >
-          {showAddCap ? (
-            <>
-              <X className="h-3.5 w-3.5" />
-              <span>{isVi ? 'Đóng' : 'Close'}</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-3.5 w-3.5" />
-              <span>{isVi ? 'Đặt trần mục' : 'Add Cap'}</span>
-            </>
-          )}
-        </Button>
+        <div className="pointer-events-none absolute -right-2 -bottom-3 z-10">
+          <GeometricBuddy
+            shape={activeBuddy.shape}
+            pose={overallSpentPct >= 100 ? 'slide' : overallSpentPct >= 80 ? 'gym' : undefined}
+            mood={
+              overallSpentPct >= 100 ? 'worried' : overallSpentPct >= 80 ? 'surprised' : 'happy'
+            }
+            size={108}
+          />
+        </div>
       </div>
 
       {/* Compact Month Budget Bar */}
@@ -406,6 +422,31 @@ export function BudgetAndFundsSection({
           })}
         </div>
       )}
+
+      {/* Quick Inline Category & Subcategory Customizer */}
+      <div className="border-t border-[var(--border-hairline)] pt-2.5">
+        <button
+          type="button"
+          data-testid="toggle-budget-category-customizer"
+          onClick={() => setShowCategoryCustomizer((v) => !v)}
+          className="flex w-full items-center justify-between rounded-xl bg-[var(--bg-subtle)] px-3 py-2 text-xs font-extrabold text-[var(--ink-primary)] transition hover:bg-[#D7C3F8]/35"
+        >
+          <span>
+            {isVi
+              ? '🗂️ Tùy chỉnh Danh mục, Mục con (Subcategory) & Nhãn'
+              : '🗂️ Customize Categories, Subcategories & Tags'}
+          </span>
+          <span className="text-[11px] font-bold text-[var(--ink-secondary)]">
+            {showCategoryCustomizer ? (isVi ? 'Thu gọn ▲' : 'Hide ▲') : isVi ? 'Mở ▼' : 'Open ▼'}
+          </span>
+        </button>
+
+        {showCategoryCustomizer && (
+          <div className="mt-2.5">
+            <CustomTagsAndCategoriesBox />
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

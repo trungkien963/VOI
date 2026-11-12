@@ -336,4 +336,90 @@ describe('Milestone 3: Onboarding, Opening Balance, Debt Book, Credit Card, Recu
     const stepState = await onboardingRepository.markStepCompleted('added_second_account_or_NA');
     expect(stepState.added_second_account_or_NA).toBe(true);
   });
+
+  it('Referential Integrity: soft-deleting and restoring a Split Bill or Debt Repayment automatically reconciles debt_items and Net Worth', async () => {
+    const { account, defaultPocket } = await accountRepository.createAccountWithOpeningBalance({
+      id: 'acc-integrity-bank',
+      name: 'VCB',
+      type: 'bank',
+      currency: 'VND',
+      openingBalanceMinor: 5_000_000,
+    });
+
+    // 1. Create a Split Bill (800k total: 200k own + 300k Minh + 300k Lan)
+    await debtRepository.createPaidForOthersAtomic({
+      groupId: 'grp-integrity-split',
+      expenseTransactionId: 'tx-integrity-own',
+      userId: 'local-user',
+      sourceAccountId: account.id,
+      sourcePocketId: defaultPocket.id,
+      currency: 'VND',
+      totalPaidMinor: 800_000,
+      ownExpenseMinor: 200_000,
+      categoryId: SYSTEM_CATEGORY_IDS.foodDining,
+      note: 'Ăn tối chia bill',
+      occurredAt: '2026-11-10T19:00:00.000Z',
+      shares: [
+        {
+          debtId: 'debt-int-minh',
+          transactionId: 'tx-int-minh',
+          counterpartyId: 'cp-minh',
+          counterpartyName: 'Minh',
+          amountMinor: 300_000,
+        },
+        {
+          debtId: 'debt-int-lan',
+          transactionId: 'tx-int-lan',
+          counterpartyId: 'cp-lan',
+          counterpartyName: 'Lan',
+          amountMinor: 300_000,
+        },
+      ],
+    });
+
+    // Soft-delete the primary expense transaction -> must atomically void companion lends AND cancel both debts
+    await transactionRepository.softDeleteTransactionAtomic('tx-integrity-own');
+    let pocketAfterVoid = (await localDb.pockets.get(defaultPocket.id))!;
+    let debtsAfterVoid = await localDb.debt_items.toArray();
+    expect(pocketAfterVoid.cached_balance_minor).toBe(5_000_000);
+    expect(debtsAfterVoid.every((d) => d.status === 'cancelled' && d.remaining_minor === 0)).toBe(
+      true,
+    );
+    expect(computeNetWorth({ pockets: [pocketAfterVoid], debts: debtsAfterVoid })).toBe(5_000_000);
+
+    // 1-Tap Undo (restoreTransactionAtomic) -> must atomically restore entire Split Bill cluster AND reopen debts!
+    await transactionRepository.restoreTransactionAtomic('tx-integrity-own');
+    const pocketAfterRestore = (await localDb.pockets.get(defaultPocket.id))!;
+    const debtsAfterRestore = await localDb.debt_items.toArray();
+    expect(pocketAfterRestore.cached_balance_minor).toBe(4_200_000);
+    expect(
+      debtsAfterRestore.every((d) => d.status === 'open' && d.remaining_minor === 300_000),
+    ).toBe(true);
+    expect(computeNetWorth({ pockets: [pocketAfterRestore], debts: debtsAfterRestore })).toBe(
+      4_800_000,
+    );
+
+    // 2. Record full repayment for Minh (300k), then void the repayment -> Minh's debt must reopen to 300k!
+    const settledMinh = await debtRepository.recordRepaymentAtomic({
+      debtId: 'debt-int-minh',
+      amountMinor: 300_000,
+      accountId: account.id,
+      pocketId: defaultPocket.id,
+    });
+    expect(settledMinh.status).toBe('settled');
+    expect(settledMinh.remaining_minor).toBe(0);
+
+    const minhRepayTx = (await localDb.transactions.toArray()).find(
+      (t) => t.debt_id === 'debt-int-minh' && t.type === 'debt_collect',
+    )!;
+    await transactionRepository.softDeleteTransactionAtomic(minhRepayTx.id);
+
+    const reopenedMinh = (await localDb.debt_items.get('debt-int-minh'))!;
+    expect(reopenedMinh.status).toBe('open');
+    expect(reopenedMinh.remaining_minor).toBe(300_000);
+    pocketAfterVoid = (await localDb.pockets.get(defaultPocket.id))!;
+    debtsAfterVoid = await localDb.debt_items.toArray();
+    expect(pocketAfterVoid.cached_balance_minor).toBe(4_200_000);
+    expect(computeNetWorth({ pockets: [pocketAfterVoid], debts: debtsAfterVoid })).toBe(4_800_000);
+  });
 });

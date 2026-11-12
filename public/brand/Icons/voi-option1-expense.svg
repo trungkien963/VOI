@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-70 -38 140 92" width="140" height="92"><defs><path id="fw" d="M28 -14 C40 -26 52 -32 60 -30 A8 8 0 0 1 66 -16 A8 8 0 0 1 64 -2 A8 8 0 0 1 56 10 C46 12 36 8 28 6 Z"></path></defs>
+<path d="M-12 26 L-14 46 L-22 48 M12 26 L14 46 L22 48" stroke="#B96FD6" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+<g fill="#E7A0FE"><use href="#fw"></use><use href="#fw" transform="scale(-1 1)"></use></g>
+<path fill="#E7A0FE" d="M-16.0 -32.0 A6.3 6.3 0 0 1 -4.8 -32.0 A8.3 8.3 0 0 1 10.1 -32.0 A8.0 8.0 0 0 1 24.3 -30.2 A7.5 7.5 0 0 1 34.0 -20.8 A7.3 7.3 0 0 1 36.0 -7.9 A7.3 7.3 0 0 1 36.0 5.1 A7.3 7.3 0 0 1 35.1 18.1 A7.5 7.5 0 0 1 26.9 28.8 A7.0 7.0 0 0 1 14.9 32.0 A6.2 6.2 0 0 1 3.8 32.0 A7.5 7.5 0 0 1 -9.7 32.0 A6.0 6.0 0 0 1 -20.3 31.5 A7.9 7.9 0 0 1 -32.2 23.8 A8.0 8.0 0 0 1 -36.0 10.1 A7.7 7.7 0 0 1 -36.0 -3.7 A6.2 6.2 0 0 1 -35.8 -14.7 A7.7 7.7 0 0 1 -29.3 -26.9 A8.0 8.0 0 0 1 -16.0 -32.0Z"></path>
+<circle cx="-9" cy="-6" r="3.5" fill="#000180"></circle><circle cx="9" cy="-6" r="3.5" fill="#000180"></circle>
+<circle cx="-21" cy="6" r="5.5" fill="#C870EA" opacity="0.6"></circle><circle cx="21" cy="6" r="5.5" fill="#C870EA" opacity="0.6"></circle>
+<path d="M-4.5 2 L4.5 2 L0 8 Z" fill="#006EE9" stroke="#006EE9" stroke-width="2" stroke-linejoin="round"></path></svg>

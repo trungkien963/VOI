@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import {
+  Check,
   Eye,
   EyeOff,
   Flame,
@@ -8,6 +9,7 @@ import {
   Plus,
   ReceiptText,
   Settings,
+  Sparkles,
   Wallet,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -17,23 +19,23 @@ import { InsightsView } from '../features/analytics/InsightsView';
 import { AssetsAndDebtsView } from '../features/assets/AssetsAndDebtsView';
 import { outboxSyncEngine } from '../db/sync/outbox-sync-engine';
 import { HomeView } from '../features/home/HomeView';
+import { CelebrationOverlay } from '../features/onboarding/CelebrationOverlay';
+import {
+  AVATAR_PRESETS,
+  getAvatarPresetMeta,
+  WelcomeOnboardingModal,
+} from '../features/onboarding/WelcomeOnboardingModal';
 import { PwaInstallAndEngagementCard } from '../features/pwa/PwaInstallAndEngagementCard';
 import { QuickAddSheet } from '../features/quick-add/QuickAddSheet';
 import { SettingsView } from '../features/settings/SettingsView';
 import { TransactionsLedgerView } from '../features/transactions/TransactionsLedgerView';
-import { useTranslation, type TranslationDictionary } from '../shared/i18n';
+import { useTranslation } from '../shared/i18n';
 import { applyThemeToDom } from '../shared/theme/themes';
 import { BottomSheet } from '../shared/ui/BottomSheet';
 import { IconButton } from '../shared/ui/Button';
+import { GeometricBuddy } from '../shared/ui/GeometricBuddy';
 import { VoiLogo } from '../shared/ui/VoiLogo';
 import { useUiStore, type NavTabId } from './ui-store';
-
-function getGreetingText(dict: TranslationDictionary): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return dict.greeting.morning;
-  if (hour < 18) return dict.greeting.afternoon;
-  return dict.greeting.evening;
-}
 
 export function AppShell(): ReactElement {
   const {
@@ -41,7 +43,8 @@ export function AppShell(): ReactElement {
     hideBalances,
     themeId,
     colorMode,
-    syncStatus,
+    userName,
+    avatarId,
     streakDays,
     maxStreakDays,
     noSpendDates,
@@ -51,9 +54,14 @@ export function AppShell(): ReactElement {
     toggleHideBalances,
     setSyncStatus,
     setStreakDays,
+    setAvatarId,
+    setUserName,
   } = useUiStore();
-  const { t, locale, toggleLocale } = useTranslation();
+  const { t, locale } = useTranslation();
+  const isVi = locale === 'vi';
   const [isStreakSheetOpen, setIsStreakSheetOpen] = useState(false);
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
+  const avatarPreset = getAvatarPresetMeta(avatarId);
 
   const liveTransactions = useLiveQuery(() => localDb.transactions.toArray(), [], []);
 
@@ -134,43 +142,49 @@ export function AppShell(): ReactElement {
   return (
     <div className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--ink-primary)] pb-28">
       <div className="mx-auto max-w-md px-4 pt-4">
-        {/* Brand-Forward Top Header */}
-        <header className="mb-4 flex items-center justify-between gap-2.5 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3.5 py-2.5 shadow-2xs">
+        {/* Minimal Brand-Forward Top Header (No greeting truncation, no Synced clutter, Language in Settings, Quick Companion & Theme Sheet) */}
+        <header className="mb-3.5 flex items-center justify-between gap-2 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3.5 py-2 shadow-2xs">
           <button
             type="button"
             onClick={() => setActiveTab('home')}
             className="flex min-w-0 items-center gap-2.5 text-left"
           >
-            <VoiLogo variant="cobalt" size={40} className="rounded-2xl shadow-2xs" />
+            <VoiLogo variant="cobalt" size={36} className="rounded-xl shadow-2xs" />
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-black tracking-tight text-[var(--ink-primary)]">
-                  {t.app.name}
+              <span className="block text-base leading-tight font-black tracking-tight text-[var(--ink-primary)]">
+                {t.app.name}
+              </span>
+              {userName && (
+                <span className="block truncate text-[11px] font-bold text-[var(--ink-secondary)]">
+                  {userName}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/12 px-2 py-0.5 text-[10px] font-bold text-[#10B981]">
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-[#10B981]"
-                    aria-hidden="true"
-                  />
-                  <span>{t.sync[syncStatus]}</span>
-                </span>
-              </div>
-              <h1 className="truncate text-xs font-semibold text-[var(--ink-secondary)]">
-                {getGreetingText(t)} ✨
-              </h1>
+              )}
             </div>
           </button>
 
-          <div className="flex shrink-0 items-center gap-1">
-            {/* Multi-Language Quick Pill (EN default / VI) */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Companion & Theme Quick Switcher Pill (Opens standalone BottomSheet — NEVER restarts Onboarding!) */}
             <button
               type="button"
-              onClick={toggleLocale}
-              aria-label={t.nav.languageToggleAria}
-              data-testid="language-toggle-btn"
-              className="flex h-8 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 text-[11px] font-extrabold tracking-wider text-[var(--ink-primary)] uppercase transition hover:border-[var(--border-strong)]"
+              onClick={() => setIsAvatarPickerOpen(true)}
+              data-testid="header-avatar-btn"
+              aria-label={isVi ? 'Đổi nhân vật & chủ đề màu' : 'Change companion & color theme'}
+              title={isVi ? 'Đổi nhân vật & chủ đề màu' : 'Change companion & color theme'}
+              style={{ backgroundColor: avatarPreset.cardBgHex }}
+              className="flex h-8 items-center gap-1.5 rounded-full border border-[#191919]/15 py-0.5 pr-2.5 pl-1 text-xs font-extrabold text-[#191919] shadow-2xs transition hover:scale-[1.02]"
             >
-              {locale.toUpperCase()}
+              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-[#FAFAFA]/80">
+                <GeometricBuddy
+                  shape={avatarPreset.shape}
+                  colorHex={avatarPreset.characterFillHex}
+                  accessory={avatarPreset.accessory}
+                  mood="happy"
+                  size={22}
+                />
+              </span>
+              <span className="hidden text-[11px] font-black sm:inline">
+                {isVi ? avatarPreset.nameVi : avatarPreset.nameEn}
+              </span>
             </button>
 
             <button
@@ -269,15 +283,97 @@ export function AppShell(): ReactElement {
       {/* Hybrid Money+ Quick-Add Sheet */}
       <QuickAddSheet />
 
+      {/* Welcome & Personalization Onboarding Flow + Celebration/Confirmation Overlays */}
+      <WelcomeOnboardingModal />
+      <CelebrationOverlay />
+
       {/* Daily Momentum, Streak Freeze & PWA Sheet */}
       <BottomSheet
         open={isStreakSheetOpen}
         onClose={() => setIsStreakSheetOpen(false)}
         title={t.m5.streakTitle}
         titleId="header-streak-sheet-title"
-        closeLabel={locale === 'vi' ? 'Đóng' : 'Close'}
+        closeLabel={isVi ? 'Đóng' : 'Close'}
       >
         <PwaInstallAndEngagementCard />
+      </BottomSheet>
+
+      {/* Standalone Quick Companion & Theme Switcher Sheet (Changes Theme & Avatar in 1 tap without restarting Onboarding!) */}
+      <BottomSheet
+        open={isAvatarPickerOpen}
+        onClose={() => setIsAvatarPickerOpen(false)}
+        title={isVi ? 'Chọn Nhân vật & Chủ đề màu' : 'Companion & Color Theme'}
+        titleId="header-avatar-picker-title"
+        closeLabel={isVi ? 'Xong' : 'Done'}
+      >
+        <div className="space-y-3.5">
+          <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-3 py-2">
+            <Sparkles
+              className="h-4 w-4 shrink-0"
+              style={{ color: avatarPreset.characterFillHex }}
+            />
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder={isVi ? 'Tên gọi của bạn...' : 'Your nickname...'}
+              aria-label={isVi ? 'Tên gọi của bạn' : 'Your nickname'}
+              className="min-w-0 flex-1 bg-transparent text-xs font-black text-[var(--ink-primary)] focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {AVATAR_PRESETS.map((preset) => {
+              const isSelected = preset.id === avatarId;
+              const titleText = isVi ? preset.nameVi : preset.nameEn;
+              const tagText = isVi ? preset.tagVi : preset.tagEn;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  data-testid={`quick-avatar-option-${preset.id}`}
+                  onClick={() => {
+                    setAvatarId(preset.id);
+                    setIsAvatarPickerOpen(false);
+                  }}
+                  style={{ backgroundColor: preset.cardBgHex }}
+                  className={`relative flex min-h-[126px] flex-col justify-between overflow-hidden rounded-[22px] p-2.5 text-left transition-all ${
+                    isSelected
+                      ? 'scale-[1.02] shadow-sm ring-2 ring-[#191919]'
+                      : 'opacity-90 hover:opacity-100'
+                  }`}
+                >
+                  <div className="relative z-10 space-y-0.5">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${
+                        isSelected
+                          ? 'bg-[#191919] text-[#FAFAFA]'
+                          : 'bg-[#FAFAFA]/80 text-[#191919]'
+                      }`}
+                    >
+                      {isSelected ? <Check className="h-3 w-3 stroke-[3]" /> : '•'}
+                    </span>
+                    <p className="text-[11px] leading-tight font-black text-[#191919]">
+                      {titleText}
+                    </p>
+                    <p className="text-[9px] font-bold text-[#191919]/75">{tagText}</p>
+                  </div>
+
+                  <div className="pointer-events-none absolute -right-1.5 -bottom-2">
+                    <GeometricBuddy
+                      shape={preset.shape}
+                      colorHex={preset.characterFillHex}
+                      accessory={preset.accessory}
+                      blush={isSelected}
+                      mood={isSelected ? 'excited' : 'happy'}
+                      size={78}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </BottomSheet>
     </div>
   );

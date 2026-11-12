@@ -201,6 +201,16 @@ export function computeSalaryMonthlyStatus(params: {
     0,
   );
 
+  // If the user marked their current month's salary as already included in their opening balance
+  // (e.g. during Onboarding Step 2), `salaryRule.last_run_date` starts with `monthKey` and `next_run_date`
+  // is scheduled for next month (> monthKey). Treat this month's cycle as already accounted for so
+  // HomeView never double-prompts the user to add the same salary again!
+  const isAlreadyAccountedInCycle = Boolean(
+    salaryRule &&
+    ((salaryRule.last_run_date && salaryRule.last_run_date.startsWith(monthKey)) ||
+      (salaryRule.next_run_date && salaryRule.next_run_date.slice(0, 7) > monthKey)),
+  );
+
   const priorSalaryTx = salaryTxs.find((tx) => !tx.txn_date.startsWith(monthKey)) ?? null;
   const lastMonthSalaryMinor = priorSalaryTx ? Math.abs(priorSalaryTx.amount_minor) : 0;
 
@@ -229,7 +239,7 @@ export function computeSalaryMonthlyStatus(params: {
   return {
     salaryRule,
     confirmedThisMonthMinor,
-    isConfirmedThisMonth: confirmedThisMonthMinor > 0,
+    isConfirmedThisMonth: confirmedThisMonthMinor > 0 || isAlreadyAccountedInCycle,
     suggestedAmountMinor,
     lastMonthSalaryMinor,
     paydayDayOfMonth: salaryRule?.day_of_month ?? 5,

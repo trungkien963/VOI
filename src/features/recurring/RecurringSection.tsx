@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { SYSTEM_CATEGORY_IDS } from '../../domain/categories/default-categories';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useUiStore } from '../../app/ui-store';
 import { DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
 import { onboardingRepository } from '../../db/repositories/onboarding-repository';
 import { recurringRepository } from '../../db/repositories/recurring-repository';
@@ -24,15 +25,20 @@ import {
 } from '../../domain/ledger/recurring-calculator';
 import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
 import type { RecurrenceFrequency, RecurringRule } from '../../domain/types/entities';
-import { useTranslation } from '../../shared/i18n';
+import { getAccountDisplayName, useTranslation } from '../../shared/i18n';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
+import { GeometricBuddy } from '../../shared/ui/GeometricBuddy';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 
 type RuleKindMode = 'salary' | 'bill' | 'installment';
 
 export function RecurringSection(): ReactElement {
   const { t, locale } = useTranslation();
+  const triggerCelebration = useUiStore((s) => s.triggerCelebration);
+  const avatarId = useUiStore((s) => s.avatarId);
+  const activeBuddy = getAvatarPresetMeta(avatarId);
   const isVi = locale === 'vi';
   const [showAdd, setShowAdd] = useState(false);
   const [ruleKind, setRuleKind] = useState<RuleKindMode>('bill');
@@ -44,6 +50,8 @@ export function RecurringSection(): ReactElement {
   const [nextRunDate, setNextRunDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payingRuleId, setPayingRuleId] = useState<string | null>(null);
   const [customPayAmountText, setCustomPayAmountText] = useState('');
+  const [confirmingEarlyRuleId, setConfirmingEarlyRuleId] = useState<string | null>(null);
+  const [processingRuleId, setProcessingRuleId] = useState<string | null>(null);
 
   const livePockets = useLiveQuery(
     async () => {
@@ -115,13 +123,61 @@ export function RecurringSection(): ReactElement {
     setShowAdd(false);
   };
 
+  const handleConfirmRule = async (
+    rule: RecurringRule,
+    overrideAmountMinor?: number,
+  ): Promise<void> => {
+    if (processingRuleId === rule.id) return;
+    setProcessingRuleId(rule.id);
+    try {
+      const finalMinor =
+        overrideAmountMinor !== undefined && overrideAmountMinor > 0
+          ? overrideAmountMinor
+          : rule.amount_minor;
+      const updatedRule = await recurringRepository.confirmDueRuleAtomic(rule.id, finalMinor);
+      const targetPocket =
+        pockets.find((p) => p.id === rule.pocket_id || p.account_id === rule.account_id) ??
+        activePocket;
+      const walletLabel = targetPocket ? getAccountDisplayName(targetPocket, locale) : '';
+      const formattedAmt = formatMoney(finalMinor, 'VND');
+
+      if (rule.template_type === 'income') {
+        triggerCelebration({
+          kind: 'salary_confirmed',
+          variant: 'modal',
+          flowMascot: 'income',
+          amountText: `+${formattedAmt} · ${rule.title}`,
+          title: isVi ? 'Đã xác nhận khoản thu định kỳ! 🎉' : 'Recurring Income Confirmed! 🎉',
+          subtitle: isVi
+            ? `Đã cộng +${formattedAmt} vào ${walletLabel}. Kỳ kế tiếp đã chuyển sang ngày ${updatedRule.next_run_date}.`
+            : `Added +${formattedAmt} to ${walletLabel}. Next cycle is scheduled for ${updatedRule.next_run_date}.`,
+        });
+      } else {
+        triggerCelebration({
+          kind: 'transaction_saved',
+          variant: 'toast',
+          flowMascot: 'expense',
+          title: isVi
+            ? `Đã ghi nhận -${formattedAmt} (${rule.title})`
+            : `Confirmed -${formattedAmt} (${rule.title})`,
+          subtitle: isVi
+            ? `Kỳ kế tiếp: ${updatedRule.next_run_date}`
+            : `Next due: ${updatedRule.next_run_date}`,
+        });
+      }
+      setPayingRuleId(null);
+      setCustomPayAmountText('');
+      setConfirmingEarlyRuleId(null);
+    } finally {
+      setProcessingRuleId(null);
+    }
+  };
+
   const handleConfirmWithCustomAmount = async (rule: RecurringRule): Promise<void> => {
     const parsedMinor = parseFlexibleMoneyInput(customPayAmountText, 'VND');
     const actualMinor =
       customPayAmountText.trim() && parsedMinor > 0 ? parsedMinor : rule.amount_minor;
-    await recurringRepository.confirmDueRuleAtomic(rule.id, actualMinor);
-    setPayingRuleId(null);
-    setCustomPayAmountText('');
+    await handleConfirmRule(rule, actualMinor);
   };
 
   const previewAmountMinor = parseFlexibleMoneyInput(amountText, 'VND');
@@ -129,34 +185,44 @@ export function RecurringSection(): ReactElement {
 
   return (
     <Card className="space-y-3.5">
-      {/* Clean Header without multi-line button wrapping */}
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-bold text-[var(--ink-primary)]">{t.m3.recurringTitle}</h3>
-          <p className="mt-0.5 text-xs text-[var(--ink-secondary)]">
-            {isVi
-              ? 'Hoá đơn cố định (nhà, điện, nước) & trả góp theo kỳ.'
-              : 'Monthly bills (rent, utilities) & N-term installments.'}
-          </p>
+      {/* Companion Hero Stage with Oversized Corner-Peeking Memory VOI (07-voi-tri-nho) */}
+      <div
+        style={{ backgroundColor: activeBuddy.cardBgHex }}
+        className="relative overflow-hidden rounded-[24px] border border-[#191919]/12 p-4 pr-24 text-[#191919]"
+      >
+        <div className="pointer-events-none absolute -right-7 -bottom-7 h-32 w-32 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75" />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-sm font-black text-[#191919]">{t.m3.recurringTitle}</h3>
+            <p className="mt-0.5 text-xs font-semibold text-[#191919]/75">
+              {isVi
+                ? 'Hoá đơn cố định (nhà, điện, nước) & trả góp theo kỳ.'
+                : 'Monthly bills (rent, utilities) & N-term installments.'}
+            </p>
+          </div>
+          <Button
+            variant={showAdd ? 'outline' : 'ink'}
+            size="xs"
+            onClick={() => setShowAdd((v) => !v)}
+            className="shrink-0"
+          >
+            {showAdd ? (
+              <>
+                <X className="h-3.5 w-3.5" />
+                <span>{isVi ? 'Đóng' : 'Close'}</span>
+              </>
+            ) : (
+              <>
+                <Plus className="h-3.5 w-3.5" />
+                <span>{isVi ? 'Thêm lịch' : 'Add New'}</span>
+              </>
+            )}
+          </Button>
         </div>
-        <Button
-          variant={showAdd ? 'outline' : 'ink'}
-          size="xs"
-          onClick={() => setShowAdd((v) => !v)}
-          className="shrink-0"
-        >
-          {showAdd ? (
-            <>
-              <X className="h-3.5 w-3.5" />
-              <span>{isVi ? 'Đóng' : 'Close'}</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-3.5 w-3.5" />
-              <span>{isVi ? 'Thêm lịch' : 'Add New'}</span>
-            </>
-          )}
-        </Button>
+
+        <div className="pointer-events-none absolute -right-2 -bottom-3 z-10">
+          <GeometricBuddy shape="hexagon" pose="memory" mood="happy" size={104} />
+        </div>
       </div>
 
       {/* 1-Tap Quick Templates (Only shown when adding or empty) */}
@@ -627,27 +693,77 @@ export function RecurringSection(): ReactElement {
                   </div>
                 )}
 
+                {/* 2-Step Confirmation Guard When Recording a Future Cycle Early (Prevents Accidental Double-Clicks!) */}
+                {!isDue && confirmingEarlyRuleId === rule.id && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#191919] bg-[#F7F296]/70 px-3 py-2 text-xs text-[#191919]">
+                    <span className="font-bold">
+                      {isVi
+                        ? `Kỳ này đã xong! Bạn muốn ghi sớm kỳ kế tiếp (${rule.next_run_date})?`
+                        : `Already confirmed! Record next cycle (${rule.next_run_date}) early?`}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={processingRuleId === rule.id}
+                        onClick={() => void handleConfirmRule(rule)}
+                        className="rounded-lg bg-[#191919] px-2.5 py-1 text-[11px] font-black text-[#FAFAFA] disabled:opacity-50"
+                      >
+                        {isVi ? 'Đồng ý ghi sớm' : 'Yes, post early'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingEarlyRuleId(null)}
+                        className="rounded-lg border border-[#191919]/20 bg-[#FAFAFA] px-2 py-1 text-[11px] font-bold text-[#191919]"
+                      >
+                        {isVi ? 'Huỷ' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Clean 1-Row Action Footer */}
                 <div className="flex items-center justify-between gap-2 border-t border-[var(--border-hairline)] pt-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="ink"
-                      size="xs"
-                      onClick={() => void recurringRepository.confirmDueRuleAtomic(rule.id)}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      <span>
-                        {isDue
-                          ? t.m3.confirmBtn
-                          : isInstallment
-                            ? isVi
-                              ? `Trả kỳ ${doneTerms + 1}/${totalTerms}`
-                              : `Pay Term ${doneTerms + 1}/${totalTerms}`
-                            : isVi
-                              ? 'Xác nhận'
-                              : 'Confirm'}
-                      </span>
-                    </Button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isDue ? (
+                      <Button
+                        variant="ink"
+                        size="xs"
+                        disabled={processingRuleId === rule.id}
+                        onClick={() => void handleConfirmRule(rule)}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        <span>{t.m3.confirmBtn}</span>
+                      </Button>
+                    ) : (
+                      <>
+                        {/* Clear Confirmed Badge so user knows this cycle is already done */}
+                        <span
+                          data-testid={`recurring-confirmed-badge-${rule.id}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-[#191919]/15 bg-[#B7EDB8] px-2.5 py-1 text-[11px] font-extrabold text-[#191919]"
+                        >
+                          <Check className="h-3.5 w-3.5 stroke-[2.8]" />
+                          <span>{isVi ? 'Đã xác nhận kỳ này' : 'Confirmed this cycle'}</span>
+                        </span>
+
+                        {confirmingEarlyRuleId !== rule.id && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingEarlyRuleId(rule.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-secondary)] transition hover:border-[#191919] hover:text-[var(--ink-primary)]"
+                          >
+                            <span>
+                              {isInstallment
+                                ? isVi
+                                  ? `Trả sớm kỳ ${doneTerms + 1}/${totalTerms}`
+                                  : `Pay Term ${doneTerms + 1}/${totalTerms} early`
+                                : isVi
+                                  ? 'Ghi sớm kỳ tới'
+                                  : 'Log next cycle early'}
+                            </span>
+                          </button>
+                        )}
+                      </>
+                    )}
 
                     {!isInstallment && (
                       <button

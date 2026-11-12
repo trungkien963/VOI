@@ -75,7 +75,13 @@ export function PrivacyBlurAndLockOverlay(): ReactElement | null {
       >
         <div className="w-full max-w-xs space-y-4 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-card)] p-6 text-center shadow-lg">
           <div className="flex justify-center">
-            <GeometricBuddy shape="hexagon" colorHex="#3B82F6" mood="happy" size={56} />
+            <GeometricBuddy
+              shape="hexagon"
+              pose="peeking"
+              colorHex="#3B82F6"
+              mood="happy"
+              size={84}
+            />
           </div>
           <div>
             <h2 className="text-base font-extrabold text-[var(--ink-primary)]">

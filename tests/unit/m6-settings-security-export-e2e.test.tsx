@@ -268,6 +268,6 @@ describe('Milestone 6: Settings, App Lock, Data Portability, Analytics & Full E2
   it('passes Accessibility landmark and icon-button aria-label checks on AppShell', () => {
     render(<AppShell />);
     expect(screen.getByRole('navigation', { name: /navigation|điều hướng/i })).toBeInTheDocument();
-    expect(screen.getByTestId('language-toggle-btn')).toHaveAttribute('aria-label');
+    expect(screen.getByTestId('header-avatar-btn')).toHaveAttribute('aria-label');
   });
 });

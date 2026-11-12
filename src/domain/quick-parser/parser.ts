@@ -1,6 +1,6 @@
 import { DEFAULT_SYSTEM_CATEGORIES, SYSTEM_CATEGORY_IDS } from '../categories/default-categories';
 import type { CurrencyCode } from '../money/currency';
-import type { AccountType, MerchantAlias, TransactionType } from '../types/entities';
+import type { AccountType, Category, MerchantAlias, TransactionType } from '../types/entities';
 import {
   extractAmountAndCurrency,
   extractTagsFromInput,
@@ -19,6 +19,8 @@ export interface QuickParseOptions {
   thousandsInputMode?: boolean;
   defaultCurrency?: CurrencyCode;
   learnedAliases?: ReadonlyArray<MerchantAlias>;
+  categories?: ReadonlyArray<Category>;
+  preferredKind?: 'expense' | 'income' | 'transfer';
 }
 
 export interface ParsedQuickInput {
@@ -28,6 +30,7 @@ export interface ParsedQuickInput {
   currency: CurrencyCode;
   categoryId: string | null;
   categorySlug: string | null;
+  categoryMatchedByKeyword?: boolean;
   counterpartyName: string | null;
   transferRoute: TransferRouteHint | null;
   suggestedAccountId: string | null;
@@ -149,11 +152,20 @@ export function parseQuickInput(
     textWithoutTags,
     options,
   );
-  const { type, transferRoute, counterpartyName } = inferTypeAndCounterparty(
-    rawTrimmed,
-    cleanedTextWithoutAmount,
-  );
+  const inferred = inferTypeAndCounterparty(rawTrimmed, cleanedTextWithoutAmount);
+  const type: TransactionType =
+    options.preferredKind === 'income'
+      ? 'income'
+      : options.preferredKind === 'transfer'
+        ? 'transfer'
+        : inferred.type;
+  const { transferRoute, counterpartyName } = inferred;
   const normNote = normalizeVietnamese(cleanedTextWithoutAmount.replace(/^\+/, ''));
+
+  const categoryPool: ReadonlyArray<Category> =
+    options.categories && options.categories.length > 0
+      ? options.categories
+      : DEFAULT_SYSTEM_CATEGORIES;
 
   if (options.learnedAliases && normNote.length > 0) {
     const matchedAlias = options.learnedAliases.find((alias) => {
@@ -161,26 +173,30 @@ export function parseQuickInput(
       return hasWholePhrase(normNote, aliasNorm) || hasWholePhrase(aliasNorm, normNote);
     });
     if (matchedAlias?.category_id) {
-      const cat = DEFAULT_SYSTEM_CATEGORIES.find((c) => c.id === matchedAlias.category_id);
-      return {
-        rawInput: rawText,
-        type,
-        amountMinor,
-        currency,
-        categoryId: matchedAlias.category_id,
-        categorySlug: cat?.slug ?? null,
-        counterpartyName,
-        transferRoute,
-        suggestedAccountId: matchedAlias.default_account_id ?? null,
-        suggestedAccountType: 'bank',
-        tags,
-        note: cleanedTextWithoutAmount.replace(/^\+\s*/, '').trim() || rawTrimmed,
-      };
+      const cat = categoryPool.find((c) => c.id === matchedAlias.category_id);
+      if (!options.preferredKind || !cat || cat.kind === options.preferredKind) {
+        return {
+          rawInput: rawText,
+          type,
+          amountMinor,
+          currency,
+          categoryId: matchedAlias.category_id,
+          categorySlug: cat?.slug ?? null,
+          categoryMatchedByKeyword: true,
+          counterpartyName,
+          transferRoute,
+          suggestedAccountId: matchedAlias.default_account_id ?? null,
+          suggestedAccountType: 'bank',
+          tags,
+          note: cleanedTextWithoutAmount.replace(/^\+\s*/, '').trim() || rawTrimmed,
+        };
+      }
     }
   }
 
   let categoryId: string | null = null;
   let categorySlug: string | null = null;
+  let categoryMatchedByKeyword = false;
 
   if (type === 'transfer') {
     categoryId =
@@ -189,26 +205,45 @@ export function parseQuickInput(
         : SYSTEM_CATEGORY_IDS.internalTransfer;
     categorySlug =
       transferRoute === 'bank_to_credit_card' ? 'credit-card-payment' : 'internal-transfer';
+    categoryMatchedByKeyword = Boolean(transferRoute);
   } else if (type === 'expense' || type === 'income') {
     const targetKind = type === 'income' ? 'income' : 'expense';
-    for (const entry of EXTRA_CATEGORY_KEYWORD_MAP) {
-      if (entry.keywords.some((kw) => hasWholePhrase(normNote, kw))) {
-        const found = DEFAULT_SYSTEM_CATEGORIES.find(
-          (c) => c.slug === entry.slug && c.kind === targetKind,
-        );
-        if (found) {
-          categoryId = found.id;
-          categorySlug = found.slug;
-          break;
+    // Prioritize custom user categories/subcategories first
+    for (const cat of categoryPool) {
+      if (cat.is_system || cat.kind !== targetKind || cat.archived_at !== null) continue;
+      const candidateKeywords = [
+        ...cat.keywords.map((k) => normalizeVietnamese(k)),
+        normalizeVietnamese(cat.name),
+      ].filter(Boolean);
+      if (candidateKeywords.some((kw) => hasWholePhrase(normNote, kw))) {
+        categoryId = cat.id;
+        categorySlug = cat.slug;
+        categoryMatchedByKeyword = true;
+        break;
+      }
+    }
+    if (!categoryId) {
+      for (const entry of EXTRA_CATEGORY_KEYWORD_MAP) {
+        if (entry.keywords.some((kw) => hasWholePhrase(normNote, kw))) {
+          const found = categoryPool.find(
+            (c) => c.slug === entry.slug && c.kind === targetKind && c.archived_at === null,
+          );
+          if (found) {
+            categoryId = found.id;
+            categorySlug = found.slug;
+            categoryMatchedByKeyword = true;
+            break;
+          }
         }
       }
     }
     if (!categoryId) {
-      for (const cat of DEFAULT_SYSTEM_CATEGORIES) {
-        if (cat.kind !== targetKind) continue;
+      for (const cat of categoryPool) {
+        if (cat.kind !== targetKind || cat.archived_at !== null) continue;
         if (cat.keywords.some((kw) => hasWholePhrase(normNote, kw))) {
           categoryId = cat.id;
           categorySlug = cat.slug;
+          categoryMatchedByKeyword = true;
           break;
         }
       }
@@ -237,6 +272,7 @@ export function parseQuickInput(
     currency,
     categoryId,
     categorySlug,
+    categoryMatchedByKeyword,
     counterpartyName,
     transferRoute,
     suggestedAccountId: null,

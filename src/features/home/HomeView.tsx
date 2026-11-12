@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import {
-  ArrowDownLeft,
-  ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   Banknote,
@@ -25,7 +23,7 @@ import {
   computeThreeTierFinancialOverview,
   type FundProgressItem,
 } from '../../domain/budgets/budget-calculator';
-import { DEFAULT_SYSTEM_CATEGORIES } from '../../domain/categories/default-categories';
+import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import {
   computeNetWorth,
   computePeriodReportSummary,
@@ -34,8 +32,9 @@ import { summarizeTransactionGroup } from '../../domain/ledger/paid-for-others';
 import { isRecurringRuleDue } from '../../domain/ledger/recurring-calculator';
 import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
 import { resolveEffectiveCategoryId } from '../../domain/quick-parser/parser';
-import type { AccountType, Category, Pocket } from '../../domain/types/entities';
+import type { AccountType, BuddyMood, Category, Pocket } from '../../domain/types/entities';
 import {
+  getAccountDisplayName,
   getCategoryDisplayName,
   useTranslation,
   type TranslationDictionary,
@@ -43,10 +42,13 @@ import {
 import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
-import { GeometricClusterIcon, type ClusterMascotMood } from '../../shared/ui/GeometricClusterIcon';
+import { GeometricBuddy, type VoiElephantPose } from '../../shared/ui/GeometricBuddy';
+import { type ClusterMascotMood } from '../../shared/ui/GeometricClusterIcon';
+import { VoiFlowIcon } from '../../shared/ui/VoiFlowIcon';
 import { ReconcileSheet } from '../assets/ReconcileSheet';
 import { BudgetAndFundsSection } from '../budgets/BudgetAndFundsSection';
 import { OnboardingChecklistCard } from '../onboarding/OnboardingChecklistCard';
+import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 
 interface WeekDayItem {
   label: string;
@@ -95,37 +97,37 @@ function getAccountTypeMeta(
     case 'bank':
       return {
         label: dict.accounts.bankType,
-        bgClass: 'bg-[#3B82F6]/12',
-        textClass: 'text-[#2563EB]',
+        bgClass: 'bg-[#BCDBEB]',
+        textClass: 'text-[#2F5FD0]',
         icon: <Landmark className="h-4 w-4" />,
       };
     case 'cash':
       return {
         label: dict.accounts.cashType,
-        bgClass: 'bg-[#F59E0B]/14',
-        textClass: 'text-[#D97706]',
+        bgClass: 'bg-[#F7F296]',
+        textClass: 'text-[#A37A00]',
         icon: <Banknote className="h-4 w-4" />,
       };
     case 'e_wallet':
       return {
         label: dict.accounts.eWalletType,
-        bgClass: 'bg-[#EC4899]/12',
-        textClass: 'text-[#DB2777]',
+        bgClass: 'bg-[#F5C2D7]',
+        textClass: 'text-[#D13B7B]',
         icon: <Smartphone className="h-4 w-4" />,
       };
     case 'credit_card':
       return {
         label: dict.accounts.creditType,
-        bgClass: 'bg-[#8B5CF6]/12',
-        textClass: 'text-[#7C3AED]',
+        bgClass: 'bg-[#D7C3F8]',
+        textClass: 'text-[#6E44A3]',
         icon: <CreditCard className="h-4 w-4" />,
       };
     case 'savings':
     default:
       return {
         label: dict.accounts.savingsType,
-        bgClass: 'bg-[#10B981]/12',
-        textClass: 'text-[#059669]',
+        bgClass: 'bg-[#B7EDB8]',
+        textClass: 'text-[#1E7E3A]',
         icon: <PiggyBank className="h-4 w-4" />,
       };
   }
@@ -134,24 +136,31 @@ function getAccountTypeMeta(
 interface FlowShortcutItem {
   id: 'flow-cost' | 'flow-earn' | 'flow-debt' | 'flow-transfer';
   label: string;
-  bgClass: string;
-  textClass: string;
+  tileBgHex: string;
+  tileBorderHex: string;
+  haloBgHex: string;
   icon: ReactElement;
 }
 
 export function HomeView(): ReactElement {
   const {
     hideBalances,
+    avatarId,
+    userName,
     checkedInNoSpendToday,
     openQuickAdd,
     openEditTransaction,
     checkInNoSpendToday,
     clearNoSpendDate,
+    triggerCelebration,
     setActiveTab,
     setWalletSubTab,
+    setAvatarId,
   } = useUiStore();
   const { t, locale } = useTranslation();
   const isVi = locale === 'vi';
+  const activeBuddy = getAvatarPresetMeta(avatarId);
+  const [buddyTapCount, setBuddyTapCount] = useState(0);
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const [selectedDateIso, setSelectedDateIso] = useState<string>(todayIso);
@@ -183,15 +192,7 @@ export function HomeView(): ReactElement {
     .sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)));
 
   const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
-  const allCategories: ReadonlyArray<Category> =
-    liveCategories.length > 0
-      ? [
-          ...DEFAULT_SYSTEM_CATEGORIES,
-          ...liveCategories.filter(
-            (c) => !DEFAULT_SYSTEM_CATEGORIES.some((sys) => sys.id === c.id),
-          ),
-        ]
-      : DEFAULT_SYSTEM_CATEGORIES;
+  const allCategories: ReadonlyArray<Category> = mergeSystemAndLiveCategories(liveCategories);
 
   const liveTransactions = useLiveQuery(() => localDb.transactions.toArray(), [], []);
   const liveLines = useLiveQuery(() => localDb.transaction_lines.toArray(), [], []);
@@ -320,6 +321,47 @@ export function HomeView(): ReactElement {
             ? 'surplus'
             : 'happy';
 
+  const effectiveBuddyMood: BuddyMood =
+    buddyTapCount % 3 === 1
+      ? 'wink'
+      : buddyTapCount % 3 === 2
+        ? 'excited'
+        : mascotMood === 'danger'
+          ? 'worried'
+          : mascotMood === 'warning'
+            ? 'surprised'
+            : mascotMood === 'payday' || mascotMood === 'surplus'
+              ? 'excited'
+              : 'happy';
+
+  const heroElephantPose: VoiElephantPose | undefined =
+    buddyTapCount % 3 === 1
+      ? 'peeking'
+      : buddyTapCount % 3 === 2
+        ? 'super'
+        : mascotMood === 'danger'
+          ? 'slide'
+          : mascotMood === 'warning'
+            ? 'gym'
+            : checkedInNoSpendToday && selectedDayReport.totalExpenseBaseMinor === 0
+              ? 'sleep'
+              : undefined;
+
+  const buddyDisplayName = isVi ? activeBuddy.nameVi : activeBuddy.nameEn;
+  const buddyTrait = isVi ? activeBuddy.tagVi : activeBuddy.tagEn;
+  const userCallName = userName.trim() || (isVi ? 'bạn' : 'friend');
+
+  const interactiveQuote =
+    buddyTapCount % 3 === 1
+      ? isVi
+        ? `💬 ${buddyDisplayName}: "${userCallName} cứ ghi thật nhanh 3 giây, mọi con số để mình canh cho!"`
+        : `💬 ${buddyDisplayName}: "Log in 3 seconds, ${userCallName} — I've got your numbers covered!"`
+      : buddyTapCount % 3 === 2
+        ? isVi
+          ? `✨ Phong cách "${buddyTrait}" đang bật! Chạm tên mình nếu muốn đổi linh vật nhé.`
+          : `✨ "${buddyTrait}" mode active! Tap my name badge anytime to switch buddies.`
+        : null;
+
   const coachBubbleText =
     !salaryStatus.isConfirmedThisMonth && salaryStatus.suggestedAmountMinor > 0
       ? isVi
@@ -364,30 +406,34 @@ export function HomeView(): ReactElement {
     {
       id: 'flow-cost',
       label: t.flows.cost,
-      bgClass: 'bg-[#FF6B35]/12',
-      textClass: 'text-[#FF6B35]',
-      icon: <ArrowUpRight className="h-4 w-4 stroke-[2.4]" />,
+      tileBgHex: '#F3E8FF',
+      tileBorderHex: '#D8B4FE',
+      haloBgHex: '#FFFFFF',
+      icon: <VoiFlowIcon variant="expense" size={44} />,
     },
     {
       id: 'flow-earn',
       label: t.flows.earn,
-      bgClass: 'bg-[#10B981]/12',
-      textClass: 'text-[#059669]',
-      icon: <ArrowDownLeft className="h-4 w-4 stroke-[2.4]" />,
+      tileBgHex: '#DCFCE7',
+      tileBorderHex: '#86EFAC',
+      haloBgHex: '#FFFFFF',
+      icon: <VoiFlowIcon variant="income" size={44} />,
     },
     {
       id: 'flow-debt',
       label: t.flows.borrowLend,
-      bgClass: 'bg-[#8B5CF6]/12',
-      textClass: 'text-[#7C3AED]',
-      icon: <Users className="h-4 w-4 stroke-[2.2]" />,
+      tileBgHex: '#FFE4E6',
+      tileBorderHex: '#FDA4AF',
+      haloBgHex: '#FFFFFF',
+      icon: <VoiFlowIcon variant="lend-borrow" size={44} />,
     },
     {
       id: 'flow-transfer',
       label: t.flows.transfer,
-      bgClass: 'bg-[#0D9488]/12',
-      textClass: 'text-[#0D9488]',
-      icon: <ArrowLeftRight className="h-4 w-4 stroke-[2.2]" />,
+      tileBgHex: '#E0F2FE',
+      tileBorderHex: '#7DD3FC',
+      haloBgHex: '#FFFFFF',
+      icon: <VoiFlowIcon variant="transfer" size={44} />,
     },
   ];
 
@@ -409,20 +455,31 @@ export function HomeView(): ReactElement {
               }`}
             >
               <span
+                style={
+                  day.isToday && !isSelected ? { color: activeBuddy.characterFillHex } : undefined
+                }
                 className={`text-[11px] font-bold ${
                   isSelected
                     ? 'text-[var(--ink-primary)]'
                     : day.isToday
-                      ? 'text-[#FF6B35]'
+                      ? ''
                       : 'text-[var(--ink-muted)]'
                 }`}
               >
                 {day.label}
               </span>
               <div
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: activeBuddy.cardBgHex,
+                        borderColor: '#191919',
+                      }
+                    : undefined
+                }
                 className={`relative flex h-10 w-10 items-center justify-center rounded-full text-xs font-extrabold tabular-nums transition ${
                   isSelected
-                    ? 'bg-[#141413] text-white shadow-xs'
+                    ? 'border-2 text-[#191919] shadow-xs'
                     : day.isToday
                       ? 'border-2 border-[#141413] bg-[var(--bg-card)] text-[var(--ink-primary)]'
                       : 'border border-[var(--border-hairline)] bg-[var(--bg-card)] text-[var(--ink-primary)] group-hover:border-[var(--border-strong)]'
@@ -431,8 +488,11 @@ export function HomeView(): ReactElement {
                 {day.dayNumber}
                 {hasActivity && (
                   <span
+                    style={
+                      isSelected ? { backgroundColor: activeBuddy.characterFillHex } : undefined
+                    }
                     className={`absolute -bottom-0.5 h-1.5 w-1.5 rounded-full ${
-                      isSelected ? 'bg-[#FF6B35]' : 'bg-[#141413]'
+                      isSelected ? '' : 'bg-[#141413]'
                     }`}
                   />
                 )}
@@ -442,35 +502,67 @@ export function HomeView(): ReactElement {
         })}
       </section>
 
-      {/* CARD 1: FOCUSED HERO SUMMARY (Breathable 3-Zone Layout, Zero Duplicate Text) */}
+      {/* CARD 1: FOCUSED HERO SUMMARY WITH OVERSIZED CORNER-PEEKING COMPANION (BAEMIN / Plopp Style) */}
       <Card aria-labelledby="hero-today-heading">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p
-                id="hero-today-heading"
-                className="text-xs font-bold tracking-wider text-[var(--ink-secondary)] uppercase"
+        {/* Companion Pastel Stage Banner with Oversized Corner-Peeking Mascot */}
+        <div
+          style={{ backgroundColor: activeBuddy.cardBgHex }}
+          className="relative overflow-hidden rounded-[26px] border border-[#191919]/12 p-4 text-[#191919] transition-colors"
+        >
+          {/* Luminous White Contrast Halo behind the Mascot so it Pops Vividly */}
+          <div className="pointer-events-none absolute -right-8 -bottom-8 h-40 w-40 rounded-full border-2 border-[#FFFFFF] bg-[#FFFFFF]/75 shadow-sm" />
+          <div className="pointer-events-none absolute -top-6 right-16 h-16 w-16 rounded-full bg-[#FAFAFA]/45" />
+
+          {/* Left Hero Data & Live Speech Bubble (padded right so text never collides with oversized mascot) */}
+          <div className="relative z-10 min-w-0 pr-24 sm:pr-28">
+            {/* Companion Identity & 1-Tap Theme Switcher Pill (Cycles companion/theme directly without restarting Onboarding!) */}
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const order = ['pop', 'cobalt', 'matcha', 'flamingo', 'sunny', 'rose'] as const;
+                  const idx = order.indexOf(avatarId);
+                  const nextId = order[(idx + 1) % order.length] ?? 'cobalt';
+                  setAvatarId(nextId);
+                }}
+                data-testid="hero-companion-badge"
+                title={isVi ? 'Chạm để đổi màu nhân vật' : 'Tap to switch companion theme'}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#191919]/15 bg-[#FAFAFA]/90 px-2.5 py-0.5 text-[10px] font-black text-[#191919] shadow-2xs transition hover:bg-[#FAFAFA]"
               >
-                {selectedDateIso === todayIso
-                  ? t.hero.todaySpentLabel
-                  : isVi
-                    ? `CHI TIÊU NGÀY ${selectedDateIso}`
-                    : `SPENT ON ${selectedDateIso}`}
-              </p>
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: activeBuddy.characterFillHex }}
+                />
+                <span>{buddyDisplayName}</span>
+                <span className="text-[#191919]/40">·</span>
+                <span className="text-[#191919]/75">{buddyTrait}</span>
+              </button>
+
               {selectedDateIso !== todayIso && (
                 <button
                   type="button"
                   onClick={() => setSelectedDateIso(todayIso)}
-                  className="rounded-full bg-[var(--bg-subtle)] px-2 py-0.5 text-[10px] font-bold text-[var(--ink-primary)] hover:bg-[var(--border-hairline)]"
+                  className="rounded-full bg-[#191919] px-2.5 py-0.5 text-[10px] font-bold text-[#FAFAFA]"
                 >
                   {isVi ? 'Về Hôm nay' : 'Back to Today'}
                 </button>
               )}
             </div>
 
-            {/* Hero Number: Your True Personal Spending (consistent with This Month!) */}
             <p
-              className="mt-1 text-3xl font-extrabold tracking-tight text-[var(--ink-primary)] sm:text-4xl tabular-nums"
+              id="hero-today-heading"
+              className="text-[11px] font-extrabold tracking-wider text-[#191919]/70 uppercase"
+            >
+              {selectedDateIso === todayIso
+                ? t.hero.todaySpentLabel
+                : isVi
+                  ? `CHI TIÊU NGÀY ${selectedDateIso}`
+                  : `SPENT ON ${selectedDateIso}`}
+            </p>
+
+            {/* Hero Number: Your True Personal Spending */}
+            <p
+              className="mt-0.5 text-3xl font-black tracking-tight text-[#191919] sm:text-4xl tabular-nums"
               data-testid="today-spent-amount"
             >
               {formatMoney(selectedDayReport.totalExpenseBaseMinor, 'VND', {
@@ -478,18 +570,18 @@ export function HomeView(): ReactElement {
               })}
             </p>
 
-            {/* Single Compact Metadata Line (Never wraps into 2 messy lines) */}
+            {/* Single Compact Metadata Line */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-secondary)]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FAFAFA]/85 px-2.5 py-1 text-[11px] font-bold text-[#191919]/80 shadow-2xs">
                 <span>{t.hero.monthSpentLabel}:</span>
                 <strong
-                  className="font-extrabold text-[var(--ink-primary)] tabular-nums"
+                  className="font-black text-[#191919] tabular-nums"
                   data-testid="month-spent-amount"
                 >
                   {formatMoney(monthReport.totalExpenseBaseMinor, 'VND', { hidden: hideBalances })}
                 </strong>
                 {momComparison.deltaPercentage !== null && (
-                  <span className="text-[10px] font-bold text-[var(--ink-muted)]">
+                  <span className="text-[10px] font-extrabold text-[#191919]/65">
                     (
                     {momComparison.deltaPercentage > 0
                       ? `+${momComparison.deltaPercentage}%`
@@ -500,7 +592,7 @@ export function HomeView(): ReactElement {
               </span>
 
               {selectedDayLentMinor > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#8B5CF6]/10 px-2.5 py-1 text-[11px] font-bold text-[#6D28D9] tabular-nums">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#191919] px-2.5 py-1 text-[11px] font-bold text-[#FAFAFA] tabular-nums">
                   <Users className="h-3 w-3 shrink-0" />
                   <span className="whitespace-nowrap">
                     {isVi ? 'Ứng hộ: ' : 'Advanced: '}+
@@ -509,21 +601,35 @@ export function HomeView(): ReactElement {
                 </span>
               )}
             </div>
+
+            {/* Live Companion Speech Bubble */}
+            <button
+              type="button"
+              onClick={() => openBudgetSheet('caps')}
+              className="mt-2.5 inline-flex max-w-full items-center gap-1.5 rounded-2xl border border-[#191919]/10 bg-[#FAFAFA]/92 px-3 py-1.5 text-left text-[11px] leading-snug font-extrabold text-[#191919] shadow-2xs transition hover:bg-[#FAFAFA]"
+            >
+              <span className="line-clamp-2">{interactiveQuote ?? coachBubbleText}</span>
+            </button>
           </div>
 
-          {/* Mascot Anchor (~1/5 Card Width, Whole & Unclipped) */}
+          {/* OVERSIZED CORNER-PEEKING MASCOT (BAEMIN / Grab / Plopp Style — 138px peeking from bottom-right!) */}
           <button
             type="button"
-            onClick={() => openBudgetSheet('caps')}
+            onClick={() => setBuddyTapCount((c) => c + 1)}
             data-testid="hero-mascot-stage"
-            className="shrink-0 transition-transform hover:scale-[1.03]"
+            className="group absolute -right-4 -bottom-5 z-10 cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95"
             aria-label={coachBubbleText}
+            title={isVi ? 'Chạm vào linh vật để trò chuyện!' : 'Tap your buddy to interact!'}
           >
-            <GeometricClusterIcon
-              variant="stay-together"
-              mood={mascotMood}
-              size={88}
-              label="Geometric Pop Buddies"
+            <GeometricBuddy
+              shape={activeBuddy.shape}
+              colorHex={activeBuddy.characterFillHex}
+              accessory={activeBuddy.accessory}
+              blush
+              mood={effectiveBuddyMood}
+              pose={heroElephantPose}
+              size={138}
+              label={buddyDisplayName}
             />
           </button>
         </div>
@@ -538,11 +644,12 @@ export function HomeView(): ReactElement {
             type="button"
             onClick={() => openBudgetSheet('caps')}
             data-testid="home-safe-to-spend-banner"
-            className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/70 px-3 py-2.5 text-left transition hover:border-[var(--border-strong)]"
+            style={{ backgroundColor: `${activeBuddy.cardBgHex}40` }}
+            className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-hairline)] px-3 py-2.5 text-left transition hover:border-[var(--border-strong)]"
           >
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-[11px] font-semibold text-[var(--ink-secondary)]">
+                <span className="truncate text-[11px] font-bold text-[var(--ink-secondary)]">
                   {isVi ? 'Được tiêu / ngày' : 'Safe to spend / day'}
                 </span>
                 {overview.exceededCategories.length > 0 ? (
@@ -550,14 +657,19 @@ export function HomeView(): ReactElement {
                 ) : overview.warningCategories.length > 0 ? (
                   <span className="h-2 w-2 shrink-0 rounded-full bg-[#F59E0B]" />
                 ) : (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#10B981]" />
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#52C470]" />
                 )}
               </div>
               <p
-                className="mt-0.5 truncate text-xs font-extrabold text-[#2563EB] tabular-nums"
+                className="mt-0.5 truncate text-xs font-black text-[var(--ink-primary)] tabular-nums"
                 data-testid="home-daily-safe-amount"
               >
                 {formatMoney(overview.effectiveDailySafeMinor, 'VND', { hidden: hideBalances })}
+                {overview.effectiveDailySafeMinor === 0 && (
+                  <span className="ml-1.5 text-[10px] font-bold text-[#FF7A1A]">
+                    {isVi ? '· Chạm đặt hạn mức →' : '· Tap to set cap →'}
+                  </span>
+                )}
               </p>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-[var(--ink-muted)]" />
@@ -588,7 +700,7 @@ export function HomeView(): ReactElement {
           )}
         </div>
 
-        {/* 4 Clean Vector Squircle Action Shortcuts */}
+        {/* 4 Pastel-Tinted Mascot Flow Shortcut Tiles (Rich color-coded pastel stages!) */}
         <div className="mt-3 grid grid-cols-4 gap-2">
           {coreFlowShortcuts.map((flow) => (
             <button
@@ -596,14 +708,22 @@ export function HomeView(): ReactElement {
               type="button"
               data-testid={`home-shortcut-${flow.id}`}
               onClick={() => handleFlowShortcutClick(flow.id)}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-card)] py-2.5 transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-subtle)]/50"
+              style={{
+                backgroundColor: flow.tileBgHex,
+                borderColor: flow.tileBorderHex,
+              }}
+              className="group relative flex flex-col items-center justify-between gap-1.5 overflow-hidden rounded-2xl border px-1.5 pt-2.5 pb-2 shadow-2xs transition hover:-translate-y-0.5 hover:border-[#191919] hover:shadow-xs active:scale-95"
             >
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-xl ${flow.bgClass} ${flow.textClass}`}
-              >
-                {flow.icon}
+              <span className="relative flex h-12 w-12 items-center justify-center transition-transform duration-200 group-hover:scale-110">
+                <span
+                  style={{ backgroundColor: flow.haloBgHex }}
+                  className="pointer-events-none absolute inset-0.5 rounded-full opacity-80 shadow-2xs"
+                />
+                <span className="relative z-10">{flow.icon}</span>
               </span>
-              <span className="text-[11px] font-bold text-[var(--ink-primary)]">{flow.label}</span>
+              <span className="relative z-10 text-[11px] font-black text-[#191919]">
+                {flow.label}
+              </span>
             </button>
           ))}
         </div>
@@ -612,16 +732,60 @@ export function HomeView(): ReactElement {
           (selectedDateIso === todayIso && todayReport.totalExpenseBaseMinor === 0)) && (
           <Card.Footer className="flex flex-col gap-2">
             {activeTxs.length === 0 && (
-              <Button
-                variant="ink"
-                size="md"
-                fullWidth
-                onClick={() => openQuickAdd({ kind: 'expense', dateIso: selectedDateIso })}
-                className="justify-between"
-              >
-                <span className="truncate">{t.hero.primaryCta}</span>
-                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-              </Button>
+              <>
+                <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/75 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-extrabold text-[var(--ink-primary)]">
+                      {isVi
+                        ? '⚡ Chạm thử 1 món bên dưới để ghi trong 3 giây:'
+                        : '⚡ Tap a sample below to log in 3 seconds:'}
+                    </p>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(isVi
+                      ? [
+                          { label: '☕ Cafe 35k', preset: 'Cafe 35k' },
+                          { label: '🍜 Ăn trưa 55k', preset: 'Ăn trưa 55k' },
+                          { label: '🛵 Grab 40k', preset: 'Grab 40k' },
+                          { label: '🧋 Trà sữa 45k', preset: 'Trà sữa 45k' },
+                        ]
+                      : [
+                          { label: '☕ Coffee 35k', preset: 'Coffee 35k' },
+                          { label: '🍜 Lunch 55k', preset: 'Lunch 55k' },
+                          { label: '🛵 Grab 40k', preset: 'Grab 40k' },
+                          { label: '🧋 Boba 45k', preset: 'Boba 45k' },
+                        ]
+                    ).map((sample) => (
+                      <button
+                        key={sample.preset}
+                        type="button"
+                        onClick={() =>
+                          openQuickAdd({
+                            kind: 'expense',
+                            dateIso: selectedDateIso,
+                            presetText: sample.preset,
+                          })
+                        }
+                        className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] shadow-2xs transition hover:border-[#141413] hover:scale-[1.02]"
+                      >
+                        {sample.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  variant="ink"
+                  size="md"
+                  fullWidth
+                  onClick={() => openQuickAdd({ kind: 'expense', dateIso: selectedDateIso })}
+                  className="justify-between"
+                >
+                  <span className="truncate">{t.hero.primaryCta}</span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                </Button>
+              </>
             )}
 
             {selectedDateIso === todayIso && todayReport.totalExpenseBaseMinor === 0 && (
@@ -699,15 +863,34 @@ export function HomeView(): ReactElement {
                         salaryStatus.defaultAccountId ??
                         displayAccounts[0]?.id ??
                         'acc-default-bank';
-                      void budgetRepository.setupOrConfirmMonthlySalaryAtomic({
-                        amountMinor: salaryStatus.suggestedAmountMinor,
-                        paydayDayOfMonth: salaryStatus.paydayDayOfMonth,
-                        accountId: targetAccId,
-                        pocketId: salaryStatus.defaultPocketId,
-                        referenceDateIso: todayIso,
-                        confirmForCurrentMonth: true,
-                        title: isVi ? 'Lương hàng tháng' : 'Monthly Salary',
-                      });
+                      void budgetRepository
+                        .setupOrConfirmMonthlySalaryAtomic({
+                          amountMinor: salaryStatus.suggestedAmountMinor,
+                          paydayDayOfMonth: salaryStatus.paydayDayOfMonth,
+                          accountId: targetAccId,
+                          pocketId: salaryStatus.defaultPocketId,
+                          referenceDateIso: todayIso,
+                          confirmForCurrentMonth: true,
+                          title: isVi ? 'Lương hàng tháng' : 'Monthly Salary',
+                        })
+                        .then(() => {
+                          const formattedSalary = formatMoney(
+                            salaryStatus.suggestedAmountMinor,
+                            'VND',
+                          );
+                          useUiStore.getState().triggerCelebration({
+                            kind: 'salary_confirmed',
+                            variant: 'modal',
+                            flowMascot: 'income',
+                            amountText: `+${formattedSalary}`,
+                            title: isVi
+                              ? `Đã nhận lương tháng ${overview.monthKey}! 🎉`
+                              : `${overview.monthKey} Salary Confirmed! 🎉`,
+                            subtitle: isVi
+                              ? `Đã cộng +${formattedSalary} vào ví của bạn.`
+                              : `Added +${formattedSalary} to your wallet.`,
+                          });
+                        });
                     }}
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -827,22 +1010,25 @@ export function HomeView(): ReactElement {
             )}
           </div>
           <div className="flex flex-col items-end">
-            {netWorthMinor >= 0 ? (
-              <span className="inline-block rounded-full bg-[#10B981]/12 px-2 py-0.5 text-[10px] font-bold text-[#059669]">
-                {t.accounts.spendableBadge}
-              </span>
-            ) : (
-              defaultReconcilePocket && (
-                <button
-                  type="button"
-                  onClick={() => setReconcilingPocket(defaultReconcilePocket)}
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--ink-primary)] transition hover:bg-[#141413] hover:text-white"
-                >
-                  <Scale className="h-3 w-3" />
-                  <span>{isVi ? 'Nhập số dư thực tế →' : 'Set opening balance →'}</span>
-                </button>
-              )
-            )}
+            <div className="flex items-center gap-1.5">
+              {netWorthMinor > 0 ? (
+                <span className="inline-block rounded-full bg-[#10B981]/12 px-2 py-0.5 text-[10px] font-bold text-[#059669]">
+                  {t.accounts.spendableBadge}
+                </span>
+              ) : (
+                defaultReconcilePocket && (
+                  <button
+                    type="button"
+                    data-testid="home-set-opening-balance-btn"
+                    onClick={() => setReconcilingPocket(defaultReconcilePocket)}
+                    className="inline-flex items-center gap-1 rounded-full border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--ink-primary)] transition hover:bg-[#141413] hover:text-white"
+                  >
+                    <Scale className="h-3 w-3" />
+                    <span>{isVi ? 'Nhập số dư thực tế →' : 'Set opening balance →'}</span>
+                  </button>
+                )
+              )}
+            </div>
             <p
               className="mt-1 text-lg font-extrabold text-[var(--ink-primary)] tabular-nums"
               data-testid="net-worth-amount"
@@ -858,11 +1044,22 @@ export function HomeView(): ReactElement {
               .filter((acc) => acc.type !== 'savings')
               .map((acc) => {
                 const typeMeta = getAccountTypeMeta(acc.type, t);
+                const matchingPocket =
+                  displayPockets.find(
+                    (p) => p.account_id === acc.id && (p.currency ?? 'VND') === 'VND',
+                  ) ??
+                  displayPockets.find((p) => p.account_id === acc.id) ??
+                  null;
+
                 return (
                   <li key={acc.id}>
                     <button
                       type="button"
                       onClick={() => {
+                        if (acc.cached_balance_minor === 0 && matchingPocket) {
+                          setReconcilingPocket(matchingPocket);
+                          return;
+                        }
                         setWalletSubTab('wallets');
                         setActiveTab('wallets');
                       }}
@@ -875,9 +1072,16 @@ export function HomeView(): ReactElement {
                           {typeMeta.icon}
                         </span>
                         <div>
-                          <p className="text-sm font-bold text-[var(--ink-primary)]">{acc.name}</p>
+                          <p className="text-sm font-bold text-[var(--ink-primary)]">
+                            {getAccountDisplayName(acc, locale)}
+                          </p>
                           <p className="text-[11px] font-medium text-[var(--ink-secondary)]">
                             {typeMeta.label}
+                            {acc.cached_balance_minor === 0 && (
+                              <span className="ml-1.5 font-bold text-[#2F5FD0]">
+                                {isVi ? '· Chạm nhập số dư' : '· Tap to set balance'}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -959,8 +1163,8 @@ export function HomeView(): ReactElement {
                   className="flex w-full items-center justify-between rounded-xl px-1 py-2.5 text-left transition hover:bg-[var(--bg-subtle)]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#8B5CF6]/12 text-[#7C3AED]">
-                      <Users className="h-4 w-4" />
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FFA3C5]/25 text-[#D9475C]">
+                      <VoiFlowIcon variant="lend-borrow" size={26} />
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-[var(--ink-primary)]">
@@ -1000,7 +1204,15 @@ export function HomeView(): ReactElement {
       <ReconcileSheet
         pocket={reconcilingPocket}
         onClose={() => setReconcilingPocket(null)}
-        onReconciled={() => setReconcilingPocket(null)}
+        onReconciled={(feedbackMsg) => {
+          triggerCelebration({
+            kind: 'reconcile_done',
+            variant: 'toast',
+            title: isVi ? 'Đã cập nhật số dư thực tế! ✨' : 'Balance updated! ✨',
+            subtitle: feedbackMsg,
+          });
+          setReconcilingPocket(null);
+        }}
       />
 
       {/* CARD 3: COMPACT 1-LINE ONBOARDING CHECKLIST */}

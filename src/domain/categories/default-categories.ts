@@ -600,7 +600,7 @@ export const DEFAULT_SYSTEM_CATEGORIES: Category[] = [
     slug: 'unknown-income',
     kind: 'income',
     icon_name: 'square',
-    color_hex: '#10B981',
+    color_hex: '#52C470',
     keywords: ['thu nhap khong ro', 'chenh lech duong'],
     is_essential: false,
     is_system: true,
@@ -610,3 +610,30 @@ export const DEFAULT_SYSTEM_CATEGORIES: Category[] = [
     updated_at: SEED_TIMESTAMP,
   },
 ];
+
+/**
+ * Merges DEFAULT_SYSTEM_CATEGORIES with user-customized categories in IndexedDB (`liveCategories`).
+ * If a system category was renamed, recolored, or archived by the user in `liveCategories`,
+ * the user's updated record takes precedence. Also appends any custom parent/child categories.
+ */
+export function mergeSystemAndLiveCategories(liveCategories: ReadonlyArray<Category>): Category[] {
+  if (!liveCategories || liveCategories.length === 0) {
+    return [...DEFAULT_SYSTEM_CATEGORIES];
+  }
+  const liveById = new Map<string, Category>();
+  for (const cat of liveCategories) {
+    liveById.set(cat.id, cat);
+  }
+
+  const merged: Category[] = DEFAULT_SYSTEM_CATEGORIES.map(
+    (sysCat) => liveById.get(sysCat.id) ?? sysCat,
+  );
+
+  for (const cat of liveCategories) {
+    if (!DEFAULT_SYSTEM_CATEGORIES.some((sys) => sys.id === cat.id)) {
+      merged.push(cat);
+    }
+  }
+
+  return merged.sort((a, b) => a.sort_order - b.sort_order);
+}

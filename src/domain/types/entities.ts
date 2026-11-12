@@ -35,7 +35,7 @@ export type ColorMode = 'system' | 'light' | 'dark';
 
 export type SupportedLocale = 'en' | 'vi';
 
-export type ThemeId = 'pop' | 'cobalt' | 'matcha' | 'flamingo' | 'sunny';
+export type ThemeId = 'pop' | 'cobalt' | 'matcha' | 'flamingo' | 'sunny' | 'rose';
 
 export type GeometricShape =
   | 'triangle' // Cost / Chi tiêu (#FF6B35)
@@ -58,7 +58,7 @@ export type BuddyAccessory =
   | 'pencil'
   | 'bag-handle';
 
-export type BuddyMood = 'happy' | 'chill' | 'wink' | 'excited' | 'calm';
+export type BuddyMood = 'happy' | 'chill' | 'wink' | 'excited' | 'calm' | 'worried' | 'surprised';
 
 export type SyncStatus = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 

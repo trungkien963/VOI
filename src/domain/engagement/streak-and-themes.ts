@@ -174,5 +174,11 @@ export function evaluateThemeUnlocks(params: {
       requirement: 'streak_30_or_checklist',
       requiredStreakDays: 30,
     },
+    rose: {
+      themeId: 'rose',
+      unlocked: true,
+      requirement: 'default',
+      requiredStreakDays: 0,
+    },
   };
 }
