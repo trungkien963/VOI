@@ -63,7 +63,7 @@ export function BottomSheet({
           </button>
         </div>
 
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1">
+        <div className="mt-3 -mx-1 -my-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
           {children}
         </div>
       </div>

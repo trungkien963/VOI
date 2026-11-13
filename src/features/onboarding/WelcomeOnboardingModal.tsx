@@ -1039,7 +1039,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
               </div>
 
               {/* 2x3 Tall Portrait Avatar Cards Grid (Fills vertical space like Image 1 "Select an avatar") */}
-              <div className="grid flex-1 grid-cols-3 gap-3">
+              <div className="grid flex-1 grid-cols-3 gap-3 p-0.5">
                 {AVATAR_PRESETS.map((preset) => {
                   const isSelected = preset.id === selectedAvatar;
                   const titleText = isVi ? preset.nameVi : preset.nameEn;
@@ -1052,11 +1052,15 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                       onClick={() => handleSelectAvatarCard(preset.id)}
                       style={{ backgroundColor: preset.cardBgHex }}
                       className={`group relative flex min-h-[148px] flex-col justify-between overflow-hidden rounded-[28px] p-3 text-left transition-all ${
-                        isSelected
-                          ? 'scale-[1.02] shadow-md ring-3 ring-[#191919]'
-                          : 'opacity-92 hover:scale-[1.01] hover:opacity-100'
+                        isSelected ? 'shadow-md' : 'opacity-92 hover:scale-[1.01] hover:opacity-100'
                       }`}
                     >
+                      {isSelected && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 z-20 rounded-[28px] border-[3px] border-[#191919]"
+                        />
+                      )}
                       <div className="relative z-10 space-y-1">
                         <span
                           className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-black transition ${

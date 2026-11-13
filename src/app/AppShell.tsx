@@ -322,7 +322,7 @@ export function AppShell(): ReactElement {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5 p-0.5">
             {AVATAR_PRESETS.map((preset) => {
               const isSelected = preset.id === avatarId;
               const titleText = isVi ? preset.nameVi : preset.nameEn;
@@ -338,11 +338,15 @@ export function AppShell(): ReactElement {
                   }}
                   style={{ backgroundColor: preset.cardBgHex }}
                   className={`relative flex min-h-[126px] flex-col justify-between overflow-hidden rounded-[22px] p-2.5 text-left transition-all ${
-                    isSelected
-                      ? 'scale-[1.02] shadow-sm ring-2 ring-[#191919]'
-                      : 'opacity-90 hover:opacity-100'
+                    isSelected ? 'shadow-sm' : 'opacity-90 hover:opacity-100'
                   }`}
                 >
+                  {isSelected && (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-20 rounded-[22px] border-[2.5px] border-[#191919]"
+                    />
+                  )}
                   <div className="relative z-10 space-y-0.5">
                     <span
                       className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${
