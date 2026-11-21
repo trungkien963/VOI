@@ -402,7 +402,7 @@ export function CategoryGridPicker({
                 <Plus className="h-4 w-4" />
               </span>
               <span className="line-clamp-2 flex min-h-[24px] w-full items-center justify-center text-[10px] leading-tight font-bold">
-                {isVi ? '+ Danh mục' : '+ Category'}
+                {isVi ? 'Thêm mục' : 'Add new'}
               </span>
             </button>
 
@@ -616,7 +616,7 @@ export function CategoryGridPicker({
               }`}
             >
               <Plus className="h-3 w-3" />
-              <span>{isVi ? '+ Mục con' : '+ Sub'}</span>
+              <span>{isVi ? 'Thêm mục con' : 'Add sub'}</span>
             </button>
           </div>
 

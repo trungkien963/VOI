@@ -1,9 +1,12 @@
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
 import {
+  ArrowDown,
+  ArrowDownUp,
   Banknote,
   CreditCard,
   Landmark,
   PiggyBank,
+  Plus,
   ShoppingBag,
   Smartphone,
   Sparkles,
@@ -41,8 +44,6 @@ import { getAccountDisplayName, getCategoryDisplayName, useTranslation } from '.
 import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { CalculatorKeypad } from '../../shared/ui/CalculatorKeypad';
 import { CategoryGridPicker } from '../../shared/ui/CategoryGridPicker';
-import { CategoryIcon } from '../../shared/ui/CategoryIcon';
-import { VoiFlowIcon } from '../../shared/ui/VoiFlowIcon';
 import { VoiLogo } from '../../shared/ui/VoiLogo';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 
@@ -163,6 +164,7 @@ export function QuickAddSheet(): ReactElement {
   const [destPocketId, setDestPocketId] = useState<string>(DEFAULT_STARTER_POCKETS[1]?.id ?? '');
   const [receivedMajorText, setReceivedMajorText] = useState('');
   const [feeMajorText, setFeeMajorText] = useState('');
+  const [showTransferFeeInput, setShowTransferFeeInput] = useState(false);
 
   // 1-Tap Inline Split Bill state
   const [isSplitBill, setIsSplitBill] = useState(false);
@@ -339,6 +341,7 @@ export function QuickAddSheet(): ReactElement {
     setExpression('');
     setReceivedMajorText('');
     setFeeMajorText('');
+    setShowTransferFeeInput(false);
     setIsSplitBill(false);
     setSplitFriendsText('');
     setSplitOwnShareText('');
@@ -603,7 +606,6 @@ export function QuickAddSheet(): ReactElement {
           : 'e.g. Withdraw ATM 2m, Top up MoMo 500k...'
         : t.quickAddModal.placeholder;
 
-  const matchedCat = allCategories.find((c) => c.id === selectedCategoryId);
   const activeFlowMascot =
     kind === 'income'
       ? 'income'
@@ -636,48 +638,47 @@ export function QuickAddSheet(): ReactElement {
           ]}
         />
 
-        {/* Visual Click/Slide Account + Currency Bar + Date & Split Bill */}
-        <div className="space-y-1.5">
-          {/* Hidden accessible <select> elements kept in sync for screen readers & tests */}
-          <label htmlFor="quick-add-source-pocket" className="sr-only">
-            {t.quickAddModal.sourcePocketLabel}
-          </label>
-          <select
-            id="quick-add-source-pocket"
-            value={sourcePocket?.id ?? ''}
-            onChange={(e) => setSourcePocketId(e.target.value)}
-            className="sr-only"
-          >
-            {pockets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {getAccountDisplayName(p, locale)}
-              </option>
-            ))}
-          </select>
+        {/* Hidden accessible <select> elements kept in sync for screen readers & tests */}
+        <label htmlFor="quick-add-source-pocket" className="sr-only">
+          {t.quickAddModal.sourcePocketLabel}
+        </label>
+        <select
+          id="quick-add-source-pocket"
+          value={sourcePocket?.id ?? ''}
+          onChange={(e) => setSourcePocketId(e.target.value)}
+          className="sr-only"
+        >
+          {pockets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {getAccountDisplayName(p, locale)}
+            </option>
+          ))}
+        </select>
 
-          {kind === 'transfer' && (
-            <>
-              <label htmlFor="quick-add-dest-pocket" className="sr-only">
-                {t.quickAddModal.destPocketLabel}
-              </label>
-              <select
-                id="quick-add-dest-pocket"
-                value={destPocket?.id ?? ''}
-                onChange={(e) => setDestPocketId(e.target.value)}
-                className="sr-only"
-              >
-                {pockets
-                  .filter((p) => p.id !== sourcePocket?.id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {getAccountDisplayName(p, locale)}
-                    </option>
-                  ))}
-              </select>
-            </>
-          )}
+        {kind === 'transfer' && (
+          <>
+            <label htmlFor="quick-add-dest-pocket" className="sr-only">
+              {t.quickAddModal.destPocketLabel}
+            </label>
+            <select
+              id="quick-add-dest-pocket"
+              value={destPocket?.id ?? ''}
+              onChange={(e) => setDestPocketId(e.target.value)}
+              className="sr-only"
+            >
+              {pockets
+                .filter((p) => p.id !== sourcePocket?.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {getAccountDisplayName(p, locale)}
+                  </option>
+                ))}
+            </select>
+          </>
+        )}
 
-          {/* Full-Width Horizontal Slide/Click Source Wallet + Currency Pills */}
+        {/* WALLET & CURRENCY SELECTION: Single horizontal bar for Cost/Earn, or Visual Route Card (From -> To) for Transfer */}
+        {kind !== 'transfer' ? (
           <div
             data-testid="quick-add-visual-pocket-bar"
             className="flex items-center gap-1.5 overflow-x-auto py-0.5"
@@ -712,13 +713,97 @@ export function QuickAddSheet(): ReactElement {
               );
             })}
           </div>
+        ) : (
+          <div className="space-y-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/75 p-2.5">
+            {/* Step 1: Source Wallet */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-[10px] font-black tracking-wide text-[var(--ink-secondary)] uppercase">
+                  {isVi ? '1. Từ ví nguồn (Chuyển đi)' : '1. From Wallet (Source)'}
+                </span>
+                {sourcePocket && (
+                  <span className="text-[10px] font-extrabold text-[var(--ink-primary)]">
+                    {getPocketVisualLabel(sourcePocket).walletName} ({srcCurrency})
+                  </span>
+                )}
+              </div>
+              <div
+                data-testid="quick-add-visual-pocket-bar"
+                className="flex items-center gap-1.5 overflow-x-auto py-0.5"
+              >
+                {pockets.map((p) => {
+                  const isSelected = p.id === sourcePocket?.id;
+                  const meta = getPocketVisualLabel(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      data-testid={`quick-add-pocket-pill-${p.id}`}
+                      onClick={() => setSourcePocketId(p.id)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
+                        isSelected
+                          ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-card)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
+                      }`}
+                    >
+                      {renderAccountTypeGlyph(meta.accType)}
+                      <span className="max-w-[125px] truncate">{meta.walletName}</span>
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
+                          isSelected
+                            ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
+                            : 'bg-[var(--bg-subtle)] text-[var(--ink-secondary)]'
+                        }`}
+                      >
+                        {meta.currency}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          {/* Horizontal Slide/Click Destination Wallet + Currency Pills (when in Transfer mode) */}
-          {kind === 'transfer' && (
+            {/* Middle Route Connector: Arrow + Swap 1-Tap + Optional Fee Toggle */}
+            <div className="flex items-center justify-between border-y border-[var(--border-hairline)] py-1.5">
+              <div className="inline-flex items-center gap-1 text-[10px] font-black text-[#2563EB]">
+                <ArrowDown className="h-3.5 w-3.5 stroke-[2.6]" />
+                <span>{isVi ? '2. Đến ví nhận' : '2. To Destination Wallet'}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {pockets.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (sourcePocket && destPocket) {
+                        setSourcePocketId(destPocket.id);
+                        setDestPocketId(sourcePocket.id);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--ink-primary)] transition hover:border-[#191919]"
+                  >
+                    <ArrowDownUp className="h-2.5 w-2.5" />
+                    <span>{isVi ? 'Đảo chiều' : 'Swap'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowTransferFeeInput((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold transition ${
+                    showTransferFeeInput || feeMajorText.trim().length > 0
+                      ? 'border-[#191919] bg-[#191919] text-[#FAFAFA]'
+                      : 'border-dashed border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                  }`}
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                  <span>{isVi ? 'Phí chuyển' : 'Fee'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2: Destination Wallet */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-              <span className="shrink-0 text-[10px] font-extrabold text-[var(--ink-secondary)] uppercase">
-                {isVi ? 'Đến ví:' : 'To:'}
-              </span>
               {pockets
                 .filter((p) => p.id !== sourcePocket?.id)
                 .map((p) => {
@@ -730,19 +815,19 @@ export function QuickAddSheet(): ReactElement {
                       type="button"
                       data-testid={`quick-add-dest-pocket-pill-${p.id}`}
                       onClick={() => setDestPocketId(p.id)}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1 text-xs transition ${
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
                         isSelected
-                          ? 'border-2 border-[#2563EB] bg-[#2563EB] font-extrabold text-white'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#2563EB]'
+                          ? 'border-2 border-[#2563EB] bg-[#2563EB] font-extrabold text-white shadow-2xs'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-card)] font-bold text-[var(--ink-primary)] hover:border-[#2563EB]'
                       }`}
                     >
                       {renderAccountTypeGlyph(meta.accType)}
-                      <span className="max-w-[130px] truncate">{meta.walletName}</span>
+                      <span className="max-w-[125px] truncate">{meta.walletName}</span>
                       <span
                         className={`rounded-md px-1.5 py-0.5 text-[10px] font-black ${
                           isSelected
                             ? 'bg-white/20 text-white'
-                            : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                            : 'bg-[var(--bg-subtle)] text-[var(--ink-secondary)]'
                         }`}
                       >
                         {meta.currency}
@@ -751,10 +836,61 @@ export function QuickAddSheet(): ReactElement {
                   );
                 })}
             </div>
-          )}
-        </div>
 
-        {/* Expanded Split Bill Panel (Only when toggled ON) */}
+            {/* Collapsible Cross-Currency & Optional Fee Row (Hidden by default when 0đ fee & same currency!) */}
+            {(isCrossCurrency || showTransferFeeInput || feeMajorText.trim().length > 0) && (
+              <div className="grid grid-cols-1 gap-2 border-t border-[var(--border-hairline)] pt-2 sm:grid-cols-2">
+                {isCrossCurrency && (
+                  <div>
+                    <label
+                      htmlFor="quick-add-received-amount"
+                      className="block text-[10px] font-bold text-[var(--ink-secondary)]"
+                    >
+                      {t.quickAddModal.receivedAmountLabel} ({dstCurrency})
+                    </label>
+                    <input
+                      id="quick-add-received-amount"
+                      type="text"
+                      inputMode="decimal"
+                      value={receivedMajorText}
+                      onChange={(e) => setReceivedMajorText(e.target.value)}
+                      placeholder="0"
+                      className="mt-0.5 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--ink-primary)] tabular-nums"
+                    />
+                    {previewImpliedFx !== null && (
+                      <p className="mt-0.5 text-[10px] font-semibold text-[#0D9488]">
+                        {t.quickAddModal.impliedFxPrefix}: 1 {srcCurrency} = {previewImpliedFx}{' '}
+                        {dstCurrency}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {(showTransferFeeInput || feeMajorText.trim().length > 0) && (
+                  <div className={isCrossCurrency ? '' : 'sm:col-span-2'}>
+                    <label
+                      htmlFor="quick-add-transfer-fee"
+                      className="block text-[10px] font-bold text-[var(--ink-secondary)]"
+                    >
+                      {t.quickAddModal.transferFeeLabel} ({srcCurrency})
+                    </label>
+                    <input
+                      id="quick-add-transfer-fee"
+                      type="text"
+                      inputMode="decimal"
+                      value={feeMajorText}
+                      onChange={(e) => setFeeMajorText(e.target.value)}
+                      placeholder="0"
+                      className="mt-0.5 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink-primary)] tabular-nums"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Expanded Split Bill Panel (Only when opened via Split Bill shortcut) */}
         {!editingTransactionId && kind === 'expense' && isSplitBill && (
           <div className="space-y-1.5 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-2.5">
             <div className="grid grid-cols-2 gap-1.5">
@@ -841,121 +977,8 @@ export function QuickAddSheet(): ReactElement {
           </div>
         )}
 
-        {kind === 'transfer' && (
-          <div className="grid grid-cols-2 gap-2">
-            {isCrossCurrency && (
-              <div>
-                <label
-                  htmlFor="quick-add-received-amount"
-                  className="block text-[10px] font-bold text-[var(--ink-secondary)]"
-                >
-                  {t.quickAddModal.receivedAmountLabel} ({dstCurrency})
-                </label>
-                <input
-                  id="quick-add-received-amount"
-                  type="text"
-                  inputMode="decimal"
-                  value={receivedMajorText}
-                  onChange={(e) => setReceivedMajorText(e.target.value)}
-                  placeholder="0"
-                  className="mt-0.5 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-2 py-1 text-xs font-bold text-[var(--ink-primary)] tabular-nums"
-                />
-                {previewImpliedFx !== null && (
-                  <p className="mt-0.5 text-[10px] font-semibold text-[#0D9488]">
-                    {t.quickAddModal.impliedFxPrefix}: 1 {srcCurrency} = {previewImpliedFx}{' '}
-                    {dstCurrency}
-                  </p>
-                )}
-              </div>
-            )}
-            <div className={isCrossCurrency ? '' : 'col-span-2'}>
-              <label
-                htmlFor="quick-add-transfer-fee"
-                className="block text-[10px] font-bold text-[var(--ink-secondary)]"
-              >
-                {t.quickAddModal.transferFeeLabel} ({srcCurrency})
-              </label>
-              <input
-                id="quick-add-transfer-fee"
-                type="text"
-                inputMode="decimal"
-                value={feeMajorText}
-                onChange={(e) => setFeeMajorText(e.target.value)}
-                placeholder="0"
-                className="mt-0.5 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1 text-xs font-semibold text-[var(--ink-primary)] tabular-nums"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Clean, Friendly Smart Content / Note Input Card (Auto-expands downward, max 250 chars) */}
-        <div
-          style={{ borderColor: `${activeBuddy.characterFillHex}55` }}
-          className="space-y-2 rounded-2xl border-2 bg-[var(--bg-card)] p-2.5 shadow-2xs"
-        >
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex min-w-0 items-center gap-1.5">
-              {kind !== 'transfer' && matchedCat ? (
-                <span
-                  style={{ backgroundColor: `${matchedCat.color_hex}24` }}
-                  className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-[#191919]/15 px-2.5 py-0.5 text-[11px] font-extrabold text-[#191919]"
-                >
-                  <CategoryIcon
-                    slug={matchedCat.slug}
-                    iconName={matchedCat.icon_name}
-                    colorHex={matchedCat.color_hex}
-                    size="xs"
-                  />
-                  <span className="truncate">
-                    {isVi ? 'Mục: ' : 'Cat: '}
-                    {getCategoryDisplayName(matchedCat, t)}
-                  </span>
-                </span>
-              ) : (
-                <label
-                  htmlFor="quick-add-smart-note-input"
-                  className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide text-[var(--ink-primary)] uppercase"
-                >
-                  <VoiFlowIcon variant="transfer" size={18} />
-                  <span>{isVi ? 'Nội dung chuyển khoản' : 'Transfer Note'}</span>
-                </label>
-              )}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5">
-              {kind !== 'transfer' && (
-                <div>
-                  <label htmlFor="quick-add-txn-date" className="sr-only">
-                    {isVi ? 'Ngày giao dịch' : 'Date'}
-                  </label>
-                  <input
-                    id="quick-add-txn-date"
-                    type="date"
-                    value={txnDateIso}
-                    onChange={(e) => setTxnDateIso(e.target.value)}
-                    className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1 text-[11px] font-bold text-[var(--ink-primary)] tabular-nums"
-                  />
-                </div>
-              )}
-
-              {!editingTransactionId && kind === 'expense' && (
-                <button
-                  type="button"
-                  data-testid="quick-add-split-toggle"
-                  onClick={() => setIsSplitBill((prev) => !prev)}
-                  className={`flex shrink-0 items-center gap-1 rounded-xl border px-2 py-1 text-[11px] font-extrabold transition ${
-                    isSplitBill
-                      ? 'border-[#141413] bg-[#141413] text-white'
-                      : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <VoiFlowIcon variant="lend-borrow" size={15} />
-                  <span>{isVi ? 'Chia bill' : 'Split'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-
+        {/* Clean, Uncluttered Smart Content / Note Input Box (No redundant Mục/Date/Chia bill header!) */}
+        <div className="space-y-1.5">
           <div className="relative">
             <textarea
               id="quick-add-smart-note-input"
@@ -1001,11 +1024,12 @@ export function QuickAddSheet(): ReactElement {
               ))}
             </div>
           ) : (
-            parsedPreview && (
+            parsedPreview &&
+            (parsedPreview.amountMinor !== null || parsedPreview.tags.length > 0) && (
               <div
                 data-testid="quick-input-live-preview"
-                style={{ backgroundColor: `${activeBuddy.cardBgHex}65` }}
-                className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#191919]/10 px-2.5 py-1.5 text-[11px] font-bold text-[#191919]"
+                style={{ backgroundColor: `${activeBuddy.cardBgHex}50` }}
+                className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#191919]/10 px-2.5 py-1 text-[11px] font-bold text-[#191919]"
               >
                 <Sparkles
                   className="h-3.5 w-3.5 shrink-0"
@@ -1020,9 +1044,10 @@ export function QuickAddSheet(): ReactElement {
                     = {formatMoney(parsedPreview.amountMinor, parsedPreview.currency)}
                   </strong>
                 )}
-                {matchedCat && (
+                {kind === 'transfer' && sourcePocket && destPocket && (
                   <span className="rounded-full bg-[#FAFAFA] px-2 py-0.5 text-[10px] font-extrabold text-[#191919]">
-                    {getCategoryDisplayName(matchedCat, t)}
+                    {getPocketVisualLabel(sourcePocket).walletName} →{' '}
+                    {getPocketVisualLabel(destPocket).walletName}
                   </span>
                 )}
                 {parsedPreview.tags.map((tag) => (
