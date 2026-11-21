@@ -8,19 +8,26 @@ import {
   Search,
   Trash2,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useUiStore } from '../../app/ui-store';
-import { localDb } from '../../db/dexie-schema';
+import { DEFAULT_STARTER_ACCOUNTS, DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
 import { tagRepository } from '../../db/repositories/tag-repository';
 import { transactionRepository } from '../../db/repositories/transaction-repository';
-import { DEFAULT_SYSTEM_CATEGORIES } from '../../domain/categories/default-categories';
+import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import { summarizeTransactionGroup } from '../../domain/ledger/paid-for-others';
 import { formatMoney } from '../../domain/money/currency';
 import { normalizeVietnamese } from '../../domain/quick-parser/amount-extractor';
 import { resolveEffectiveCategoryId } from '../../domain/quick-parser/parser';
-import type { Category, Transaction } from '../../domain/types/entities';
-import { getCategoryDisplayName, useTranslation } from '../../shared/i18n';
+import type {
+  Account,
+  Category,
+  Pocket,
+  Transaction,
+  TransactionLine,
+} from '../../domain/types/entities';
+import { getAccountDisplayName, getCategoryDisplayName, useTranslation } from '../../shared/i18n';
 import { BottomSheet } from '../../shared/ui/BottomSheet';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
@@ -87,15 +94,62 @@ export function TransactionsLedgerView(): ReactElement {
   );
 
   const liveCategories = useLiveQuery(() => localDb.categories.toArray(), [], []);
-  const allCategories: ReadonlyArray<Category> =
-    liveCategories.length > 0
-      ? [
-          ...DEFAULT_SYSTEM_CATEGORIES,
-          ...liveCategories.filter(
-            (c) => !DEFAULT_SYSTEM_CATEGORIES.some((sys) => sys.id === c.id),
-          ),
-        ]
-      : DEFAULT_SYSTEM_CATEGORIES;
+  const allCategories: ReadonlyArray<Category> = mergeSystemAndLiveCategories(liveCategories);
+
+  const liveAccounts = useLiveQuery(() => localDb.accounts.toArray(), [], []);
+  const livePockets = useLiveQuery(() => localDb.pockets.toArray(), [], []);
+  const liveLines = useLiveQuery(() => localDb.transaction_lines.toArray(), [], []);
+
+  const accounts: ReadonlyArray<Account> =
+    liveAccounts.length > 0 ? liveAccounts : DEFAULT_STARTER_ACCOUNTS;
+  const pockets: ReadonlyArray<Pocket> =
+    livePockets.length > 0 ? livePockets : DEFAULT_STARTER_POCKETS;
+
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const pocketById = new Map(pockets.map((p) => [p.id, p]));
+  const linesByTxId = new Map<string, TransactionLine[]>();
+  for (const line of liveLines) {
+    if (line.deleted_at) continue;
+    const arr = linesByTxId.get(line.transaction_id) ?? [];
+    arr.push(line);
+    linesByTxId.set(line.transaction_id, arr);
+  }
+
+  const resolveTxAccountAndCurrencyLabel = (tx: Transaction): string => {
+    const txLines = linesByTxId.get(tx.id) ?? [];
+    const formatLineAccount = (line?: TransactionLine): string | null => {
+      if (!line) return null;
+      const acc = accountById.get(line.account_id);
+      const pocket = line.pocket_id ? pocketById.get(line.pocket_id) : undefined;
+      const walletName = acc
+        ? getAccountDisplayName(acc, locale)
+        : pocket
+          ? getAccountDisplayName(pocket, locale).replace(/\s*\([A-Z]{3}\)\s*$/, '')
+          : null;
+      const curr = (pocket?.currency ?? acc?.currency ?? tx.currency ?? 'VND').toUpperCase();
+      return walletName ? `${walletName} · ${curr}` : curr;
+    };
+
+    if (tx.type === 'transfer' && txLines.length >= 2) {
+      const outLine = txLines.find((l) => l.signed_amount_minor < 0 && !l.is_fee) ?? txLines[0];
+      const inLine = txLines.find((l) => l.signed_amount_minor > 0) ?? txLines[1];
+      const srcText = formatLineAccount(outLine);
+      const dstText = formatLineAccount(inLine);
+      if (srcText && dstText) {
+        return `${srcText} → ${dstText}`;
+      }
+    }
+
+    const primaryLine = txLines.find((l) => !l.is_fee) ?? txLines[0];
+    const resolved = formatLineAccount(primaryLine);
+    if (resolved) return resolved;
+
+    const fallbackAcc = accounts[0];
+    const fallbackCurr = (tx.currency || 'VND').toUpperCase();
+    return fallbackAcc
+      ? `${getAccountDisplayName(fallbackAcc, locale)} · ${fallbackCurr}`
+      : fallbackCurr;
+  };
 
   const normQuery = normalizeVietnamese(searchQuery.replace(/^#/, ''));
   const filteredTransactions = transactions.filter((tx) => {
@@ -306,6 +360,7 @@ export function TransactionsLedgerView(): ReactElement {
           : Math.abs(tx.amount_minor);
 
     const txTags = tagsByTxId[tx.id] ?? [];
+    const accountCurrencyLabel = resolveTxAccountAndCurrencyLabel(tx);
 
     return (
       <div
@@ -323,12 +378,25 @@ export function TransactionsLedgerView(): ReactElement {
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="shrink-0">
-            <CategoryIcon slug={cat?.slug} colorHex={cat?.color_hex} txType={tx.type} size="md" />
+            <CategoryIcon
+              slug={cat?.slug}
+              iconName={cat?.icon_name}
+              colorHex={cat?.color_hex}
+              txType={tx.type}
+              size="md"
+            />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-[var(--ink-primary)]">{primaryLabel}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-[var(--ink-secondary)]">
               <span className="truncate">{categoryTitle}</span>
+              <span
+                data-testid={`ledger-tx-account-badge-${tx.id}`}
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[10px] font-extrabold text-[var(--ink-primary)] tabular-nums"
+              >
+                <Wallet className="h-2.5 w-2.5 shrink-0 text-[var(--ink-secondary)]" />
+                <span>{accountCurrencyLabel}</span>
+              </span>
               {metaBadge && (
                 <span className="rounded-md bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--ink-secondary)]">
                   {metaBadge}
@@ -745,6 +813,7 @@ export function TransactionsLedgerView(): ReactElement {
                 <div className="flex flex-col items-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-4 text-center">
                   <CategoryIcon
                     slug={cat?.slug}
+                    iconName={cat?.icon_name}
                     colorHex={cat?.color_hex}
                     txType={selectedTx.type}
                     size="lg"
@@ -752,6 +821,10 @@ export function TransactionsLedgerView(): ReactElement {
                   <p className="mt-2 text-xs font-bold text-[var(--ink-secondary)]">
                     {catDisplayName} · {selectedTx.txn_date}
                   </p>
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-0.5 text-[11px] font-extrabold text-[var(--ink-primary)]">
+                    <Wallet className="h-3 w-3 text-[var(--ink-secondary)]" />
+                    <span>{resolveTxAccountAndCurrencyLabel(selectedTx)}</span>
+                  </span>
                   <p className="mt-1 text-2xl font-extrabold text-[var(--ink-primary)] tabular-nums">
                     {selectedTx.type === 'debt_borrow'
                       ? `${isVi ? 'Nợ ' : 'IOU '}${formatMoney(

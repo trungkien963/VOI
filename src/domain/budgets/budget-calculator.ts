@@ -285,7 +285,9 @@ export function computeThreeTierFinancialOverview(params: {
     (a) => a.type === 'bank' || a.type === 'cash' || a.type === 'e_wallet',
   );
   const fundAccounts = activeAccounts.filter((a) => a.type === 'savings');
-  const creditAccounts = activeAccounts.filter((a) => a.type === 'credit_card');
+  const creditAccounts = activeAccounts.filter(
+    (a) => a.type === 'credit_card' || a.type === 'bnpl',
+  );
 
   const liquidWalletsMinor = liquidAccounts.reduce((s, a) => s + a.cached_balance_minor, 0);
   const savingsFundsMinor = fundAccounts.reduce((s, a) => s + a.cached_balance_minor, 0);

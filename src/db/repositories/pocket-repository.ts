@@ -4,7 +4,7 @@ import {
   type ReconcileResult,
 } from '../../domain/ledger/reconcile-calculator';
 import { getLedgerStrategy } from '../../domain/ledger/strategies';
-import { convertMinorToBase } from '../../domain/money/currency';
+import { convertMinorToBase, type CurrencyCode } from '../../domain/money/currency';
 import type { GeometricShape, Pocket } from '../../domain/types/entities';
 import { BaseRepository } from './base-repository';
 import { transactionRepository } from './transaction-repository';
@@ -142,7 +142,7 @@ export class PocketRepository extends BaseRepository<Pocket> {
       userId: pocket.user_id,
       accountId: pocket.account_id,
       pocketId: pocket.id,
-      currency: (pocket.currency ?? 'VND') as 'VND' | 'USD' | 'EUR' | 'JPY' | 'SGD',
+      currency: (pocket.currency ?? 'VND') as CurrencyCode,
       appBalanceMinor: pocket.cached_balance_minor,
       actualBalanceMinor,
       occurredAt,
@@ -153,6 +153,28 @@ export class PocketRepository extends BaseRepository<Pocket> {
     }
 
     return res;
+  }
+
+  public async archivePocketAtomic(pocketId: string): Promise<void> {
+    const pocket = await this.db.pockets.get(pocketId);
+    if (!pocket || pocket.is_default) return;
+    const nowIso = new Date().toISOString();
+    await this.db.pockets.update(pocketId, {
+      archived_at: nowIso,
+      updated_at: nowIso,
+    });
+    const acc = await this.db.accounts.get(pocket.account_id);
+    if (acc && pocket.cached_balance_minor !== 0) {
+      const baseDelta = convertMinorToBase(
+        pocket.cached_balance_minor,
+        pocket.currency ?? 'VND',
+        'VND',
+      );
+      await this.db.accounts.update(pocket.account_id, {
+        cached_balance_minor: acc.cached_balance_minor - baseDelta,
+        updated_at: nowIso,
+      });
+    }
   }
 }
 

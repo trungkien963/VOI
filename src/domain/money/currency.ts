@@ -1,4 +1,4 @@
-export type CurrencyCode = 'VND' | 'USD' | 'EUR' | 'JPY' | 'KRW' | 'SGD' | 'THB';
+export type CurrencyCode = 'VND' | 'USD' | 'TWD' | 'EUR' | 'JPY' | 'KRW' | 'SGD' | 'THB';
 
 export interface CurrencyMetadata {
   code: CurrencyCode;
@@ -10,6 +10,7 @@ export interface CurrencyMetadata {
 export const CURRENCY_METADATA: Record<CurrencyCode, CurrencyMetadata> = {
   VND: { code: 'VND', symbol: 'đ', decimals: 0, defaultRateToVnd: 1 },
   USD: { code: 'USD', symbol: '$', decimals: 2, defaultRateToVnd: 25400 },
+  TWD: { code: 'TWD', symbol: 'NT$', decimals: 0, defaultRateToVnd: 790 },
   EUR: { code: 'EUR', symbol: '€', decimals: 2, defaultRateToVnd: 27500 },
   JPY: { code: 'JPY', symbol: '¥', decimals: 0, defaultRateToVnd: 170 },
   KRW: { code: 'KRW', symbol: '₩', decimals: 0, defaultRateToVnd: 19 },

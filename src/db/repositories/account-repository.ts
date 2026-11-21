@@ -24,6 +24,8 @@ const ACCOUNT_DEFAULT_VISUALS: Record<AccountType, { shape: GeometricShape; colo
   e_wallet: { shape: 'pentagon', colorHex: '#F472B6' },
   savings: { shape: 'square', colorHex: '#10B981' },
   credit_card: { shape: 'circle', colorHex: '#8B5CF6' },
+  investment: { shape: 'diamond', colorHex: '#0D9488' },
+  bnpl: { shape: 'pentagon', colorHex: '#EC4899' },
 };
 
 export class AccountRepository extends BaseRepository<Account> {
@@ -187,36 +189,54 @@ export class AccountRepository extends BaseRepository<Account> {
     id: string;
     name: string;
     type: AccountType;
+    currency?: string;
     creditLimitMinor?: number | null;
   }): Promise<Account | null> {
     const existing = await this.findById(input.id);
     if (!existing) return null;
     const visuals = ACCOUNT_DEFAULT_VISUALS[input.type];
     const nowIso = new Date().toISOString();
+    const nextCurrency = input.currency ?? existing.currency;
     const updated: Account = {
       ...existing,
       name: input.name.trim(),
       type: input.type,
+      currency: nextCurrency,
       color_hex: visuals.colorHex,
       icon_name: visuals.shape,
       credit_limit_minor:
         input.creditLimitMinor !== undefined ? input.creditLimitMinor : existing.credit_limit_minor,
       updated_at: nowIso,
     };
-    await this.upsertAtomic(updated);
 
     const pockets = await this.db.pockets.where('account_id').equals(input.id).toArray();
+    let totalBaseMinor = 0;
     for (const p of pockets) {
       if (p.is_default) {
-        await this.db.pockets.put({
+        const pocketCurrency = input.currency ?? p.currency ?? 'VND';
+        const updatedPocket: Pocket = {
           ...p,
-          name: `${updated.name} (${p.currency ?? 'VND'})`,
+          name: `${updated.name} (${pocketCurrency})`,
+          currency: pocketCurrency,
           color_hex: updated.color_hex,
           icon_name: updated.icon_name,
           updated_at: nowIso,
-        });
+        };
+        await this.db.pockets.put(updatedPocket);
+        if (!updatedPocket.archived_at) {
+          totalBaseMinor += convertMinorToBase(
+            updatedPocket.cached_balance_minor,
+            pocketCurrency,
+            'VND',
+          );
+        }
+      } else if (!p.archived_at) {
+        totalBaseMinor += convertMinorToBase(p.cached_balance_minor, p.currency ?? 'VND', 'VND');
       }
     }
+
+    updated.cached_balance_minor = totalBaseMinor;
+    await this.upsertAtomic(updated);
     return updated;
   }
 }

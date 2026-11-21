@@ -74,8 +74,10 @@ function inferTypeAndCounterparty(
   }
 
   if (
-    /\b(gui tiet kiem|cat tiet kiem|chuyen tiet kiem)\b/.test(norm) ||
-    /^(tiet kiem|cat)\b/.test(norm)
+    /\b(gui tiet kiem|cat tiet kiem|chuyen tiet kiem|nap tiet kiem|cat tien tiet kiem|bo heo)\b/.test(
+      norm,
+    ) ||
+    /^tiet kiem\b/.test(norm)
   ) {
     return { type: 'transfer', transferRoute: 'to_savings', counterpartyName: null };
   }

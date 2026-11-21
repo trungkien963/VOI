@@ -135,3 +135,19 @@ body {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
 }
+
+/* Prevent iOS Safari & Mobile WebKit from auto-zooming viewport on input focus (requires computed font-size >= 16px) */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+button,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}

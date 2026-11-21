@@ -1,8 +1,18 @@
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
-import { Sparkles, X } from 'lucide-react';
+import {
+  Banknote,
+  CreditCard,
+  Landmark,
+  PiggyBank,
+  ShoppingBag,
+  Smartphone,
+  Sparkles,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useUiStore, type QuickAddFlowKind } from '../../app/ui-store';
-import { DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
+import { DEFAULT_STARTER_ACCOUNTS, DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
 import { debtRepository } from '../../db/repositories/debt-repository';
 import { merchantAliasRepository } from '../../db/repositories/merchant-alias-repository';
 import { tagRepository } from '../../db/repositories/tag-repository';
@@ -19,7 +29,13 @@ import {
   type CurrencyCode,
 } from '../../domain/money/currency';
 import { parseQuickInput } from '../../domain/quick-parser/parser';
-import type { Category, CategoryKind } from '../../domain/types/entities';
+import type {
+  Account,
+  AccountType,
+  Category,
+  CategoryKind,
+  Pocket,
+} from '../../domain/types/entities';
 import { getAvatarPresetMeta } from '../onboarding/WelcomeOnboardingModal';
 import { getAccountDisplayName, getCategoryDisplayName, useTranslation } from '../../shared/i18n';
 import { BottomSheet } from '../../shared/ui/BottomSheet';
@@ -94,13 +110,20 @@ export function QuickAddSheet(): ReactElement {
   const activeBuddy = getAvatarPresetMeta(avatarId);
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  const liveAccounts = useLiveQuery(() => localDb.accounts.toArray(), [], []);
+  const accounts: ReadonlyArray<Account> =
+    liveAccounts.length > 0
+      ? liveAccounts.filter((a) => a.archived_at === null)
+      : DEFAULT_STARTER_ACCOUNTS;
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+
   const livePockets = useLiveQuery(
     async () => {
-      const [accounts, allPockets] = await Promise.all([
+      const [accs, allPockets] = await Promise.all([
         localDb.accounts.toArray(),
         localDb.pockets.toArray(),
       ]);
-      const activeAccIds = new Set(accounts.filter((a) => a.archived_at === null).map((a) => a.id));
+      const activeAccIds = new Set(accs.filter((a) => a.archived_at === null).map((a) => a.id));
       return allPockets
         .filter((p) => p.archived_at === null && activeAccIds.has(p.account_id))
         .sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)));
@@ -216,7 +239,8 @@ export function QuickAddSheet(): ReactElement {
 
   const handleQuickInputChange = (val: string): void => {
     setQuickInputText(val);
-    if (!val.trim()) return;
+    const trimmed = val.trim();
+    if (!trimmed) return;
     const parsed = parseQuickInput(val, {
       thousandsInputMode,
       learnedAliases,
@@ -226,12 +250,43 @@ export function QuickAddSheet(): ReactElement {
     if (parsed.amountMinor !== null && parsed.amountMinor > 0) {
       setExpression(String(parsed.amountMinor));
     }
-    // Only auto-switch tab if the user is on the default 'expense' tab and typed an explicit income/transfer command
-    // Never kick the user out of 'income' or 'transfer' back to 'expense' when typing notes!
-    if (kind === 'expense' && (parsed.type === 'income' || parsed.type === 'transfer')) {
-      setKind(parsed.type);
+    // Unified Earn/Cost Smart Input:
+    // - Typing "+..." or explicit income keywords (e.g. "lương 15tr", "thưởng 2tr") on Cost seamlessly flips to Earn ('income').
+    // - Typing "-..." on Earn seamlessly flips to Cost ('expense').
+    // - Never auto-switch to 'transfer' from Cost/Earn (prevents false-positive transfer switches like "150k cắt tóc").
+    if (kind === 'expense' && parsed.type === 'income') {
+      setKind('income');
+      setIsSplitBill(false);
+      if (parsed.categoryId && parsed.categoryMatchedByKeyword) {
+        setSelectedCategoryId(parsed.categoryId);
+      } else if (incomeCategories[0]) {
+        setSelectedCategoryId(incomeCategories[0].id);
+      }
+      return;
+    }
+    if (kind === 'income' && trimmed.startsWith('-')) {
+      setKind('expense');
+      if (parsed.categoryId && parsed.categoryMatchedByKeyword) {
+        setSelectedCategoryId(parsed.categoryId);
+      } else if (expenseCategories[0]) {
+        setSelectedCategoryId(expenseCategories[0].id);
+      }
+      return;
     }
     if (parsed.categoryId && parsed.categoryMatchedByKeyword) {
+      const matchedCategoryObj = allCategories.find((c) => c.id === parsed.categoryId);
+      if (matchedCategoryObj && (kind === 'expense' || kind === 'income')) {
+        if (matchedCategoryObj.kind === 'income' && kind !== 'income') {
+          setKind('income');
+          setIsSplitBill(false);
+        } else if (
+          matchedCategoryObj.kind === 'expense' &&
+          kind !== 'expense' &&
+          !trimmed.startsWith('+')
+        ) {
+          setKind('expense');
+        }
+      }
       setSelectedCategoryId(parsed.categoryId);
     }
   };
@@ -464,8 +519,10 @@ export function QuickAddSheet(): ReactElement {
   };
 
   // Modern Web Guidance `ime-safe-enter-submit`: guard against IME composition (`isComposing` or `keyCode === 229`)
-  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Enter') {
+  const handleInputKeyDown = (
+    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ): void => {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
         return;
@@ -475,6 +532,40 @@ export function QuickAddSheet(): ReactElement {
         void handleSaveTransaction(amountToSave);
       }
     }
+  };
+
+  const renderAccountTypeGlyph = (type?: AccountType): ReactElement => {
+    switch (type) {
+      case 'bank':
+        return <Landmark className="h-3.5 w-3.5 shrink-0 text-[#2563EB]" />;
+      case 'cash':
+        return <Banknote className="h-3.5 w-3.5 shrink-0 text-[#D97706]" />;
+      case 'e_wallet':
+        return <Smartphone className="h-3.5 w-3.5 shrink-0 text-[#DB2777]" />;
+      case 'credit_card':
+        return <CreditCard className="h-3.5 w-3.5 shrink-0 text-[#7C3AED]" />;
+      case 'investment':
+        return <TrendingUp className="h-3.5 w-3.5 shrink-0 text-[#0D9488]" />;
+      case 'bnpl':
+        return <ShoppingBag className="h-3.5 w-3.5 shrink-0 text-[#DB2777]" />;
+      case 'savings':
+      default:
+        return <PiggyBank className="h-3.5 w-3.5 shrink-0 text-[#059669]" />;
+    }
+  };
+
+  const getPocketVisualLabel = (
+    p: Pocket,
+  ): { walletName: string; currency: string; accType?: AccountType } => {
+    const parentAcc = accountById.get(p.account_id);
+    const rawName = parentAcc
+      ? getAccountDisplayName(parentAcc, locale)
+      : getAccountDisplayName(p, locale).replace(/\s*\([A-Z]{3}\)\s*$/, '');
+    return {
+      walletName: rawName,
+      currency: (p.currency ?? parentAcc?.currency ?? 'VND').toUpperCase(),
+      accType: parentAcc?.type,
+    };
   };
 
   const previewImpliedFx =
@@ -544,28 +635,27 @@ export function QuickAddSheet(): ReactElement {
           ]}
         />
 
-        {/* Compact Single-Row Toolbar: Pocket + Date (or Dest Pocket) + 1-Tap Split Bill */}
-        <div className="flex items-center gap-1.5">
-          <div className="min-w-0 flex-1">
-            <label htmlFor="quick-add-source-pocket" className="sr-only">
-              {t.quickAddModal.sourcePocketLabel}
-            </label>
-            <select
-              id="quick-add-source-pocket"
-              value={sourcePocket?.id ?? ''}
-              onChange={(e) => setSourcePocketId(e.target.value)}
-              className="w-full truncate rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1.5 text-xs font-semibold text-[var(--ink-primary)]"
-            >
-              {pockets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {getAccountDisplayName(p, locale)}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Visual Click/Slide Account + Currency Bar + Date & Split Bill */}
+        <div className="space-y-1.5">
+          {/* Hidden accessible <select> elements kept in sync for screen readers & tests */}
+          <label htmlFor="quick-add-source-pocket" className="sr-only">
+            {t.quickAddModal.sourcePocketLabel}
+          </label>
+          <select
+            id="quick-add-source-pocket"
+            value={sourcePocket?.id ?? ''}
+            onChange={(e) => setSourcePocketId(e.target.value)}
+            className="sr-only"
+          >
+            {pockets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {getAccountDisplayName(p, locale)}
+              </option>
+            ))}
+          </select>
 
-          {kind === 'transfer' ? (
-            <div className="min-w-0 flex-1">
+          {kind === 'transfer' && (
+            <>
               <label htmlFor="quick-add-dest-pocket" className="sr-only">
                 {t.quickAddModal.destPocketLabel}
               </label>
@@ -573,7 +663,7 @@ export function QuickAddSheet(): ReactElement {
                 id="quick-add-dest-pocket"
                 value={destPocket?.id ?? ''}
                 onChange={(e) => setDestPocketId(e.target.value)}
-                className="w-full truncate rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1.5 text-xs font-semibold text-[var(--ink-primary)]"
+                className="sr-only"
               >
                 {pockets
                   .filter((p) => p.id !== sourcePocket?.id)
@@ -583,36 +673,116 @@ export function QuickAddSheet(): ReactElement {
                     </option>
                   ))}
               </select>
-            </div>
-          ) : (
-            <div className="w-[122px] shrink-0">
-              <label htmlFor="quick-add-txn-date" className="sr-only">
-                {isVi ? 'Ngày giao dịch' : 'Date'}
-              </label>
-              <input
-                id="quick-add-txn-date"
-                type="date"
-                value={txnDateIso}
-                onChange={(e) => setTxnDateIso(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1.5 text-[11px] font-semibold text-[var(--ink-primary)] tabular-nums"
-              />
-            </div>
+            </>
           )}
 
-          {!editingTransactionId && kind === 'expense' && (
-            <button
-              type="button"
-              data-testid="quick-add-split-toggle"
-              onClick={() => setIsSplitBill((prev) => !prev)}
-              className={`flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold transition ${
-                isSplitBill
-                  ? 'border-[#141413] bg-[#141413] text-white'
-                  : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
-              }`}
+          {/* Horizontal Slide/Click Source Wallet + Currency Pills */}
+          <div className="flex items-center gap-1.5">
+            <div
+              data-testid="quick-add-visual-pocket-bar"
+              className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5"
             >
-              <VoiFlowIcon variant="lend-borrow" size={16} />
-              <span>{isVi ? 'Chia bill' : 'Split'}</span>
-            </button>
+              {pockets.map((p) => {
+                const isSelected = p.id === sourcePocket?.id;
+                const meta = getPocketVisualLabel(p);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    data-testid={`quick-add-pocket-pill-${p.id}`}
+                    onClick={() => setSourcePocketId(p.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs transition ${
+                      isSelected
+                        ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
+                    }`}
+                  >
+                    {renderAccountTypeGlyph(meta.accType)}
+                    <span className="max-w-[110px] truncate">{meta.walletName}</span>
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
+                        isSelected
+                          ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
+                          : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                      }`}
+                    >
+                      {meta.currency}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {kind !== 'transfer' && (
+              <div className="w-[116px] shrink-0">
+                <label htmlFor="quick-add-txn-date" className="sr-only">
+                  {isVi ? 'Ngày giao dịch' : 'Date'}
+                </label>
+                <input
+                  id="quick-add-txn-date"
+                  type="date"
+                  value={txnDateIso}
+                  onChange={(e) => setTxnDateIso(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1.5 text-[11px] font-semibold text-[var(--ink-primary)] tabular-nums"
+                />
+              </div>
+            )}
+
+            {!editingTransactionId && kind === 'expense' && (
+              <button
+                type="button"
+                data-testid="quick-add-split-toggle"
+                onClick={() => setIsSplitBill((prev) => !prev)}
+                className={`flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold transition ${
+                  isSplitBill
+                    ? 'border-[#141413] bg-[#141413] text-white'
+                    : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
+                }`}
+              >
+                <VoiFlowIcon variant="lend-borrow" size={16} />
+                <span>{isVi ? 'Chia bill' : 'Split'}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Horizontal Slide/Click Destination Wallet + Currency Pills (when in Transfer mode) */}
+          {kind === 'transfer' && (
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+              <span className="shrink-0 text-[10px] font-extrabold text-[var(--ink-secondary)] uppercase">
+                {isVi ? 'Đến ví:' : 'To:'}
+              </span>
+              {pockets
+                .filter((p) => p.id !== sourcePocket?.id)
+                .map((p) => {
+                  const isSelected = p.id === destPocket?.id;
+                  const meta = getPocketVisualLabel(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      data-testid={`quick-add-dest-pocket-pill-${p.id}`}
+                      onClick={() => setDestPocketId(p.id)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs transition ${
+                        isSelected
+                          ? 'border-2 border-[#2563EB] bg-[#2563EB] font-extrabold text-white'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#2563EB]'
+                      }`}
+                    >
+                      {renderAccountTypeGlyph(meta.accType)}
+                      <span className="max-w-[110px] truncate">{meta.walletName}</span>
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-black ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                        }`}
+                      >
+                        {meta.currency}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
           )}
         </div>
 
@@ -750,12 +920,12 @@ export function QuickAddSheet(): ReactElement {
           </div>
         )}
 
-        {/* Prominent Smart Content / Note Input Card */}
+        {/* Prominent Smart Content / Note Input Card (Unified Earn/Cost Toggle + Multi-line Auto-Expand Downward) */}
         <div
           style={{ borderColor: `${activeBuddy.characterFillHex}55` }}
           className="space-y-2 rounded-2xl border-2 bg-[var(--bg-card)] p-3 shadow-2xs"
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <label
               htmlFor="quick-add-smart-note-input"
               className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide text-[var(--ink-primary)] uppercase"
@@ -772,40 +942,86 @@ export function QuickAddSheet(): ReactElement {
                 }
                 size={20}
               />
-              <span>{isVi ? 'Nội dung / Ghi nhanh 1 dòng' : 'Smart Note / Quick Input'}</span>
+              <span>
+                {kind !== 'transfer'
+                  ? isVi
+                    ? 'Ghi nhanh Thu / Chi'
+                    : 'Unified Earn / Cost Input'
+                  : isVi
+                    ? 'Nội dung chuyển khoản'
+                    : 'Transfer Note'}
+              </span>
             </label>
 
-            {kind !== 'transfer' && matchedCat && (
-              <span
-                style={{ backgroundColor: activeBuddy.cardBgHex }}
-                className="inline-flex max-w-[52%] items-center gap-1 rounded-full border border-[#191919]/15 px-2.5 py-0.5 text-[10px] font-extrabold text-[#191919]"
-              >
-                <CategoryIcon slug={matchedCat.slug} colorHex={matchedCat.color_hex} size="xs" />
-                <span className="truncate">
-                  {isVi ? 'Mục: ' : 'Cat: '}
-                  {getCategoryDisplayName(matchedCat, t)}
+            <div className="flex items-center gap-1.5">
+              {/* Inline 1-Tap Unified Cost (-) / Earn (+) Quick Flip Pill */}
+              {kind !== 'transfer' && (
+                <div
+                  data-testid="unified-earn-cost-pill"
+                  className="inline-flex items-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-0.5 text-[10px] font-black"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleKindChange('expense')}
+                    className={`rounded-full px-2 py-0.5 transition ${
+                      kind === 'expense'
+                        ? 'bg-[#FF6B35] text-white shadow-2xs'
+                        : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                    }`}
+                  >
+                    {isVi ? '− Chi' : '− Cost'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleKindChange('income')}
+                    className={`rounded-full px-2 py-0.5 transition ${
+                      kind === 'income'
+                        ? 'bg-[#10B981] text-white shadow-2xs'
+                        : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                    }`}
+                  >
+                    {isVi ? '+ Thu' : '+ Earn'}
+                  </button>
+                </div>
+              )}
+
+              {kind !== 'transfer' && matchedCat && (
+                <span
+                  style={{ backgroundColor: `${matchedCat.color_hex}24` }}
+                  className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-[#191919]/15 px-2 py-0.5 text-[10px] font-extrabold text-[#191919]"
+                >
+                  <CategoryIcon
+                    slug={matchedCat.slug}
+                    iconName={matchedCat.icon_name}
+                    colorHex={matchedCat.color_hex}
+                    size="xs"
+                  />
+                  <span className="truncate">
+                    {isVi ? 'Mục: ' : 'Cat: '}
+                    {getCategoryDisplayName(matchedCat, t)}
+                  </span>
                 </span>
-              </span>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="relative">
-            <input
+            <textarea
               id="quick-add-smart-note-input"
               data-testid="quick-add-smart-note-input"
-              type="text"
+              rows={2}
               value={quickInputText}
               onChange={(e) => handleQuickInputChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={smartInputPlaceholder}
-              className="w-full rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3.5 py-2.5 pr-9 text-base font-extrabold text-[var(--ink-primary)] placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
+              className="min-h-[56px] w-full resize-y rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3.5 py-2 pr-9 text-base leading-snug font-extrabold text-[var(--ink-primary)] placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
             />
             {quickInputText.trim().length > 0 && (
               <button
                 type="button"
                 onClick={() => setQuickInputText('')}
                 aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
-                className="absolute top-1/2 right-2.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+                className="absolute top-2.5 right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

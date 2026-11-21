@@ -1,9 +1,13 @@
 import type { ReactElement } from 'react';
 import {
+  Baby,
+  BookOpen,
   Briefcase,
   Car,
   Coffee,
   CreditCard,
+  Dumbbell,
+  Gamepad2,
   Gift,
   GraduationCap,
   HeartPulse,
@@ -11,21 +15,26 @@ import {
   Home,
   Laptop,
   Music,
+  PawPrint,
   Percent,
   Plane,
   Scale,
+  Scissors,
   ShoppingBag,
   ShoppingCart,
   Smartphone,
+  Sparkles,
   TrendingUp,
   Tv,
   Utensils,
+  Wrench,
   Zap,
 } from 'lucide-react';
 import { VoiFlowIcon } from './VoiFlowIcon';
 
 export interface CategoryIconProps {
   slug?: string | null;
+  iconName?: string | null;
   colorHex?: string | null;
   txType?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
@@ -81,6 +90,7 @@ function getPantoneBadgeStyle(colorHex: string): { backgroundColor: string; colo
 
 export function CategoryIcon({
   slug,
+  iconName,
   colorHex,
   txType,
   size = 'md',
@@ -119,59 +129,95 @@ export function CategoryIcon({
       return <VoiFlowIcon variant="transfer" size={flowIconPx} />;
     }
 
-    switch (slug) {
+    const key = iconName && iconName !== 'circle' ? iconName : slug;
+
+    switch (key) {
+      case 'utensils':
       case 'food-dining':
       case 'eating-out':
       case 'food-delivery':
         return <Utensils className={iconClass} />;
+      case 'coffee':
       case 'coffee-tea':
         return <Coffee className={iconClass} />;
+      case 'shopping-cart':
       case 'groceries':
         return <ShoppingCart className={iconClass} />;
+      case 'car':
       case 'transport':
       case 'ride-hailing':
       case 'fuel-parking':
       case 'vehicle-maintenance':
         return <Car className={iconClass} />;
+      case 'home':
       case 'housing-bills':
       case 'rent':
         return <Home className={iconClass} />;
+      case 'zap':
       case 'utilities':
         return <Zap className={iconClass} />;
+      case 'shopping-bag':
       case 'shopping':
       case 'fashion-beauty':
         return <ShoppingBag className={iconClass} />;
+      case 'smartphone':
       case 'home-electronics':
         return <Smartphone className={iconClass} />;
+      case 'music':
       case 'lifestyle-social':
       case 'hangout-dating':
         return <Music className={iconClass} />;
+      case 'tv':
       case 'subscriptions-media':
         return <Tv className={iconClass} />;
+      case 'plane':
       case 'travel':
         return <Plane className={iconClass} />;
+      case 'heart-pulse':
       case 'health-personal':
       case 'medical':
       case 'fitness-grooming':
         return <HeartPulse className={iconClass} />;
+      case 'graduation-cap':
       case 'education-work':
       case 'books-courses':
       case 'software-ai':
         return <GraduationCap className={iconClass} />;
+      case 'gift':
       case 'family-giving':
       case 'parents-support':
       case 'weddings-gifts':
       case 'gifts-cashback':
         return <Gift className={iconClass} />;
+      case 'percent':
       case 'fees-interest':
         return <Percent className={iconClass} />;
+      case 'briefcase':
       case 'salary':
         return <Briefcase className={iconClass} />;
+      case 'trending-up':
       case 'bonus':
       case 'investment-income':
         return <TrendingUp className={iconClass} />;
+      case 'laptop':
       case 'freelance':
         return <Laptop className={iconClass} />;
+      case 'paw':
+        return <PawPrint className={iconClass} />;
+      case 'dumbbell':
+        return <Dumbbell className={iconClass} />;
+      case 'gamepad':
+        return <Gamepad2 className={iconClass} />;
+      case 'scissors':
+        return <Scissors className={iconClass} />;
+      case 'baby':
+        return <Baby className={iconClass} />;
+      case 'book':
+        return <BookOpen className={iconClass} />;
+      case 'wrench':
+        return <Wrench className={iconClass} />;
+      case 'sparkles':
+        return <Sparkles className={iconClass} />;
       case 'internal-transfer':
         return <VoiFlowIcon variant="transfer" size={flowIconPx} />;
       case 'credit-card-payment':

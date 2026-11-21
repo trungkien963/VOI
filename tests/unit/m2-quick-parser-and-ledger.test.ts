@@ -169,6 +169,26 @@ const FIFTY_SIX_PARSER_CASES: ReadonlyArray<ParserCase> = [
     expectedType: 'expense',
     expectedSlug: 'ride-hailing',
   },
+  {
+    input: 'trà sữa 120 twd',
+    expectedAmount: 120,
+    expectedCurrency: 'TWD',
+    expectedType: 'expense',
+    expectedSlug: 'coffee-tea',
+  },
+  {
+    input: '807.442k tiền điện',
+    expectedAmount: 807_442,
+    expectedCurrency: 'VND',
+    expectedType: 'expense',
+    expectedSlug: 'utilities',
+  },
+  {
+    input: '150k cắt tóc',
+    expectedAmount: 150_000,
+    expectedCurrency: 'VND',
+    expectedType: 'expense',
+  },
 
   // --- 4. Disambiguation with Multiple Numbers (Section 6.2) (8 cases) ---
   {

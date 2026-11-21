@@ -119,9 +119,9 @@ export function extractAmountAndCurrency(
   const thousandsMode = options.thousandsInputMode ?? true;
   const defaultCurrency = options.defaultCurrency ?? 'VND';
 
-  // 1. Foreign currency prefix/suffix: $12, 12$, 12 usd, €5, 5 eur, ¥1500, 1500 jpy, 20 sgd
+  // 1. Foreign currency prefix/suffix: $12, 12$, 12 usd, NT$150, 150 twd/ntd, €5, 5 eur, ¥1500, 1500 jpy, 20 sgd, 5000 krw, 100 thb
   const fxRegex =
-    /(?:^|\s)(?:\$\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:\$(?=\s|$)|usd\b)|€\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:€(?=\s|$)|eur\b)|¥\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:¥(?=\s|$)|jpy\b)|(\d+(?:[.,]\d+)?)\s*sgd\b)/i;
+    /(?:^|\s)(?:\$\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:\$(?=\s|$)|usd\b)|€\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:€(?=\s|$)|eur\b)|¥\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:¥(?=\s|$)|jpy\b)|(\d+(?:[.,]\d+)?)\s*sgd\b|(?:nt\$\s*)(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:nt\$(?=\s|$)|twd\b|ntd\b)|₩\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:₩(?=\s|$)|krw\b)|฿\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:฿(?=\s|$)|thb\b))/i;
   const fxMatch = fxRegex.exec(textWithoutTags);
   if (fxMatch) {
     const rawMatched = fxMatch[0].trim();
@@ -136,6 +136,15 @@ export function extractAmountAndCurrency(
     } else if (fxMatch[7]) {
       currency = 'SGD';
       numRaw = fxMatch[7];
+    } else if (fxMatch[8] || fxMatch[9]) {
+      currency = 'TWD';
+      numRaw = fxMatch[8] ?? fxMatch[9] ?? '';
+    } else if (fxMatch[10] || fxMatch[11]) {
+      currency = 'KRW';
+      numRaw = fxMatch[10] ?? fxMatch[11] ?? '';
+    } else if (fxMatch[12] || fxMatch[13]) {
+      currency = 'THB';
+      numRaw = fxMatch[12] ?? fxMatch[13] ?? '';
     }
     const major = parseDecimalNumber(numRaw);
     const cleaned = textWithoutTags.replace(rawMatched, ' ').replace(/\s+/g, ' ').trim();
@@ -147,7 +156,7 @@ export function extractAmountAndCurrency(
     };
   }
 
-  // 2. Compound million shorthand: "1tr2", "1tr250", "2tr5"
+  // 2. Compound million/thousand shorthand: "1tr2", "1tr250", "2tr5", "45k5"
   const compoundTrRegex = /(?:^|\s)[+]?(\d+)\s*(?:tr|trieu|triệu|cu|củ)\s*(\d{1,3})\b/i;
   const compoundTrMatch = compoundTrRegex.exec(textWithoutTags);
   if (compoundTrMatch) {
@@ -167,18 +176,12 @@ export function extractAmountAndCurrency(
 
   // 3. Explicit Vietnamese currency suffix: k, nghìn, ngàn, tr, triệu, củ, lít, đ, vnd
   const vnSuffixRegex =
-    /(?:^|\s)[+]?(\d+(?:[.,]\d+)?)\s*(k|nghin|nghìn|ngan|ngàn|tr|trieu|triệu|cu|củ|lit|lít|đ|d|vnd)(?=\s|$)/i;
+    /(?:^|\s)[+]?(\d+(?:[.,]\d+)*)\s*(k|nghin|nghìn|ngan|ngàn|tr|trieu|triệu|cu|củ|lit|lít|đ|d|vnd)(?=\s|$)/i;
   const vnSuffixMatch = vnSuffixRegex.exec(textWithoutTags);
   if (vnSuffixMatch) {
     const rawMatched = vnSuffixMatch[0].trim();
     const rawNum = vnSuffixMatch[1]!;
     const suffixNorm = normalizeVietnamese(vnSuffixMatch[2]!);
-
-    // Check if rawNum is grouped thousands like "45.000" followed by "đ"/"vnd"
-    const isGroupedThousands = /^\d{1,3}(?:[.,]\d{3})+$/.test(rawNum);
-    const numValue = isGroupedThousands
-      ? Number(rawNum.replace(/[.,]/g, ''))
-      : parseDecimalNumber(rawNum);
 
     let multiplier = 1;
     if (suffixNorm === 'k' || suffixNorm === 'nghin' || suffixNorm === 'ngan') {
@@ -188,6 +191,17 @@ export function extractAmountAndCurrency(
     } else if (suffixNorm === 'lit') {
       multiplier = 100_000;
     }
+
+    // When a multiplier suffix (k / tr / lít) is present, a single dot/comma like "807.442k" or "1.250tr"
+    // is a decimal (807.442 * 1000 = 807,442 VND) — never double-multiply as grouped thousands!
+    // Only strip thousand separators when suffix is a unit ("đ"/"d"/"vnd", multiplier === 1) or has 2+ groups ("1.250.000").
+    const isGroupedThousands =
+      multiplier === 1
+        ? /^\d{1,3}(?:[.,]\d{3})+$/.test(rawNum)
+        : /^\d{1,3}(?:[.,]\d{3}){2,}$/.test(rawNum);
+    const numValue = isGroupedThousands
+      ? Number(rawNum.replace(/[.,]/g, ''))
+      : parseDecimalNumber(rawNum);
 
     const cleaned = textWithoutTags.replace(rawMatched, ' ').replace(/\s+/g, ' ').trim();
     return {

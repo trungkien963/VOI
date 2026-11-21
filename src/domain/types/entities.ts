@@ -1,4 +1,5 @@
-export type AccountType = 'cash' | 'bank' | 'e_wallet' | 'savings' | 'credit_card';
+export type AccountType =
+  'cash' | 'bank' | 'e_wallet' | 'savings' | 'credit_card' | 'investment' | 'bnpl';
 
 export type PocketType = 'spendable' | 'goal' | 'buffer';
 
@@ -143,7 +144,7 @@ export interface Category {
   name: string;
   slug: string;
   kind: CategoryKind;
-  icon_name: GeometricShape;
+  icon_name: GeometricShape | string;
   color_hex: string;
   keywords: string[];
   is_essential: boolean;

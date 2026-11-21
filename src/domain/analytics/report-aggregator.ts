@@ -6,7 +6,7 @@ export interface CategoryBreakdownSlice {
   categoryId: string;
   slug: string;
   name: string;
-  iconName: GeometricShape;
+  iconName: GeometricShape | string;
   colorHex: string;
   amountBaseMinor: number;
   percentage: number;

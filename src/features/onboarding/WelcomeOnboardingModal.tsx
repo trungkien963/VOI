@@ -27,7 +27,12 @@ import { onboardingRepository } from '../../db/repositories/onboarding-repositor
 import { transactionRepository } from '../../db/repositories/transaction-repository';
 import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import { getLedgerStrategy } from '../../domain/ledger/strategies';
-import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
+import {
+  convertMinorToBase,
+  formatMoney,
+  parseFlexibleMoneyInput,
+  type CurrencyCode,
+} from '../../domain/money/currency';
 import type {
   AccountType,
   BuddyAccessory,
@@ -156,9 +161,21 @@ export interface ExtraWalletDraft {
   id: string;
   name: string;
   type: AccountType;
+  currency?: CurrencyCode;
   balanceText: string;
   creditLimitText: string;
 }
+
+const ONBOARDING_CURRENCY_OPTIONS: ReadonlyArray<CurrencyCode> = [
+  'VND',
+  'USD',
+  'TWD',
+  'EUR',
+  'JPY',
+  'SGD',
+  'KRW',
+  'THB',
+];
 
 const DEFAULT_CORE_CATEGORY_IDS = [
   '10000000-0000-4000-8000-000000000001', // Ăn uống
@@ -215,9 +232,12 @@ function getRemainingDaysInCurrentMonth(): number {
 
 async function applyFirstRunWalletAndBudgetSetup(params: {
   mainBankName: string;
+  bankCurrency: CurrencyCode;
   openingBalanceMinor: number;
+  cashCurrency: CurrencyCode;
   cashBalanceMinor: number;
   eWalletName: string;
+  eWalletCurrency: CurrencyCode;
   eWalletBalanceMinor: number;
   removedStarterIds: ReadonlyArray<'bank' | 'cash' | 'momo'>;
   extraWallets: ReadonlyArray<ExtraWalletDraft>;
@@ -243,6 +263,7 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
     accountId: string,
     pocketId: string,
     targetBalanceMinor: number,
+    currency: CurrencyCode,
     customName?: string,
   ): Promise<void> => {
     const acc = await localDb.accounts.get(accountId);
@@ -259,13 +280,15 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
     await localDb.accounts.put({
       ...acc,
       name: cleanName,
+      currency,
       institution_name: null,
       archived_at: null,
       updated_at: nowIso,
     });
     await localDb.pockets.put({
       ...pocket,
-      name: `${cleanName} (${pocket.currency ?? 'VND'})`,
+      name: `${cleanName} (${currency})`,
+      currency,
       archived_at: null,
       updated_at: nowIso,
     });
@@ -278,7 +301,7 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
         userId: 'local-user',
         type: 'opening_balance',
         amountMinor: deltaMinor,
-        currency: 'VND',
+        currency,
         sourceAccountId: acc.id,
         sourcePocketId: latestPocket.id,
         note: 'Số dư khởi tạo ban đầu',
@@ -293,6 +316,7 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
     'acc-default-bank',
     'pocket-acc-default-bank-vnd',
     params.openingBalanceMinor,
+    params.bankCurrency,
     params.mainBankName,
   );
   await setOrArchiveStarterAccount(
@@ -300,6 +324,7 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
     'acc-default-cash',
     'pocket-acc-default-cash-vnd',
     params.cashBalanceMinor,
+    params.cashCurrency,
     'Ví tiền mặt',
   );
   await setOrArchiveStarterAccount(
@@ -307,23 +332,25 @@ async function applyFirstRunWalletAndBudgetSetup(params: {
     'acc-default-momo',
     'pocket-acc-default-momo-vnd',
     params.eWalletBalanceMinor,
+    params.eWalletCurrency,
     params.eWalletName,
   );
 
-  // Create any extra Wallets / Credit Cards / Payment Methods added by the user
+  // Create any extra Wallets / Credit Cards / BNPL / Investment accounts added by the user
   for (const extra of params.extraWallets) {
     if (!extra.name.trim()) continue;
-    const rawBal = parseFlexibleMoneyInput(extra.balanceText, 'VND');
-    const signedBal = extra.type === 'credit_card' && rawBal > 0 ? -Math.abs(rawBal) : rawBal;
-    const creditLimit =
-      extra.type === 'credit_card'
-        ? Math.max(5_000_000, parseFlexibleMoneyInput(extra.creditLimitText, 'VND'))
-        : null;
+    const extraCurr = extra.currency ?? 'VND';
+    const rawBal = parseFlexibleMoneyInput(extra.balanceText, extraCurr);
+    const isLiability = extra.type === 'credit_card' || extra.type === 'bnpl';
+    const signedBal = isLiability && rawBal > 0 ? -Math.abs(rawBal) : rawBal;
+    const creditLimit = isLiability
+      ? Math.max(1_000_000, parseFlexibleMoneyInput(extra.creditLimitText, extraCurr))
+      : null;
 
     await accountRepository.createAccountWithOpeningBalance({
       name: extra.name.trim(),
       type: extra.type,
-      currency: 'VND',
+      currency: extraCurr,
       openingBalanceMinor: signedBal,
       creditLimitMinor: creditLimit,
     });
@@ -415,9 +442,12 @@ export function WelcomeOnboardingModal(): ReactElement | null {
     'wallets',
   );
   const [mainBankName, setMainBankName] = useState(isVi ? 'Tài khoản Ngân hàng' : 'Bank Account');
+  const [bankCurrency, setBankCurrency] = useState<CurrencyCode>('VND');
   const [openingBalanceText, setOpeningBalanceText] = useState('5.000.000');
+  const [cashCurrency, setCashCurrency] = useState<CurrencyCode>('VND');
   const [cashBalanceText, setCashBalanceText] = useState('0');
   const [eWalletName, setEWalletName] = useState(isVi ? 'Ví điện tử' : 'E-Wallet');
+  const [eWalletCurrency, setEWalletCurrency] = useState<CurrencyCode>('VND');
   const [eWalletBalanceText, setEWalletBalanceText] = useState('0');
   const [removedStarterIds, setRemovedStarterIds] = useState<Array<'bank' | 'cash' | 'momo'>>([]);
   const [activeWalletTarget, setActiveWalletTarget] = useState<'bank' | 'cash' | 'momo' | null>(
@@ -427,6 +457,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
   const [showAddWalletForm, setShowAddWalletForm] = useState(false);
   const [newWalletName, setNewWalletName] = useState('');
   const [newWalletType, setNewWalletType] = useState<AccountType>('credit_card');
+  const [newWalletCurrency, setNewWalletCurrency] = useState<CurrencyCode>('VND');
   const [newWalletBalanceText, setNewWalletBalanceText] = useState('0');
   const [newWalletCreditLimitText, setNewWalletCreditLimitText] = useState('20.000.000');
 
@@ -489,19 +520,24 @@ export function WelcomeOnboardingModal(): ReactElement | null {
   const activePreset = getAvatarPresetMeta(selectedAvatar);
   const parsedBalanceMinor = removedStarterIds.includes('bank')
     ? 0
-    : Math.max(0, parseFlexibleMoneyInput(openingBalanceText, 'VND'));
+    : Math.max(0, parseFlexibleMoneyInput(openingBalanceText, bankCurrency));
   const parsedCashMinor = removedStarterIds.includes('cash')
     ? 0
-    : Math.max(0, parseFlexibleMoneyInput(cashBalanceText, 'VND'));
+    : Math.max(0, parseFlexibleMoneyInput(cashBalanceText, cashCurrency));
   const parsedEWalletMinor = removedStarterIds.includes('momo')
     ? 0
-    : Math.max(0, parseFlexibleMoneyInput(eWalletBalanceText, 'VND'));
+    : Math.max(0, parseFlexibleMoneyInput(eWalletBalanceText, eWalletCurrency));
   const extraPositiveMinor = extraWallets.reduce((sum, w) => {
-    if (w.type === 'credit_card') return sum;
-    return sum + Math.max(0, parseFlexibleMoneyInput(w.balanceText, 'VND'));
+    if (w.type === 'credit_card' || w.type === 'bnpl' || w.type === 'investment') return sum;
+    const wCurr = w.currency ?? 'VND';
+    const minorInW = Math.max(0, parseFlexibleMoneyInput(w.balanceText, wCurr));
+    return sum + convertMinorToBase(minorInW, wCurr, 'VND');
   }, 0);
   const totalLiquidBalanceMinor =
-    parsedBalanceMinor + parsedCashMinor + parsedEWalletMinor + extraPositiveMinor;
+    convertMinorToBase(parsedBalanceMinor, bankCurrency, 'VND') +
+    convertMinorToBase(parsedCashMinor, cashCurrency, 'VND') +
+    convertMinorToBase(parsedEWalletMinor, eWalletCurrency, 'VND') +
+    extraPositiveMinor;
 
   const parsedIncomeMinor = Math.max(0, parseFlexibleMoneyInput(monthlyIncomeText, 'VND'));
   const parsedBudgetMinor = Math.max(0, parseFlexibleMoneyInput(monthlyBudgetText, 'VND'));
@@ -601,6 +637,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
         id: `extra-wallet-${Date.now()}`,
         name: cleanName,
         type: newWalletType,
+        currency: newWalletCurrency,
         balanceText: newWalletBalanceText || '0',
         creditLimitText: newWalletCreditLimitText || '20.000.000',
       },
@@ -725,9 +762,12 @@ export function WelcomeOnboardingModal(): ReactElement | null {
 
       await applyFirstRunWalletAndBudgetSetup({
         mainBankName,
+        bankCurrency,
         openingBalanceMinor: parsedBalanceMinor,
+        cashCurrency,
         cashBalanceMinor: parsedCashMinor,
         eWalletName,
+        eWalletCurrency,
         eWalletBalanceMinor: parsedEWalletMinor,
         removedStarterIds,
         extraWallets,
@@ -1224,7 +1264,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                             <div className="flex items-center gap-1">
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex w-28 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1"
+                                className="flex w-36 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-1"
                               >
                                 <input
                                   id="welcome-opening-balance-input"
@@ -1234,14 +1274,30 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={openingBalanceText}
                                   onFocus={() => setActiveWalletTarget('bank')}
                                   onChange={(e) =>
-                                    setOpeningBalanceText(formatVndDigitsInput(e.target.value))
+                                    setOpeningBalanceText(
+                                      bankCurrency === 'VND'
+                                        ? formatVndDigitsInput(e.target.value)
+                                        : e.target.value,
+                                    )
                                   }
                                   placeholder="5.000.000"
                                   className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
                                 />
-                                <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                                  đ
-                                </span>
+                                <select
+                                  data-testid="welcome-bank-currency-select"
+                                  aria-label={
+                                    isVi ? 'Tiền tệ Tài khoản Ngân hàng' : 'Bank account currency'
+                                  }
+                                  value={bankCurrency}
+                                  onChange={(e) => setBankCurrency(e.target.value as CurrencyCode)}
+                                  className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
+                                >
+                                  {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                               <button
                                 type="button"
@@ -1309,7 +1365,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                             <div className="flex items-center gap-1">
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex w-28 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1"
+                                className="flex w-36 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-1"
                               >
                                 <input
                                   data-testid="welcome-cash-balance-input"
@@ -1318,15 +1374,29 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={cashBalanceText}
                                   onFocus={() => setActiveWalletTarget('cash')}
                                   onChange={(e) =>
-                                    setCashBalanceText(formatVndDigitsInput(e.target.value))
+                                    setCashBalanceText(
+                                      cashCurrency === 'VND'
+                                        ? formatVndDigitsInput(e.target.value)
+                                        : e.target.value,
+                                    )
                                   }
                                   placeholder="0"
                                   aria-label={isVi ? 'Số dư Ví tiền mặt' : 'Cash balance'}
                                   className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
                                 />
-                                <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                                  đ
-                                </span>
+                                <select
+                                  data-testid="welcome-cash-currency-select"
+                                  aria-label={isVi ? 'Tiền tệ Ví tiền mặt' : 'Cash wallet currency'}
+                                  value={cashCurrency}
+                                  onChange={(e) => setCashCurrency(e.target.value as CurrencyCode)}
+                                  className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
+                                >
+                                  {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                               <button
                                 type="button"
@@ -1398,7 +1468,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                             <div className="flex items-center gap-1">
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex w-28 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1"
+                                className="flex w-36 items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-1"
                               >
                                 <input
                                   data-testid="welcome-ewallet-balance-input"
@@ -1407,15 +1477,31 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={eWalletBalanceText}
                                   onFocus={() => setActiveWalletTarget('momo')}
                                   onChange={(e) =>
-                                    setEWalletBalanceText(formatVndDigitsInput(e.target.value))
+                                    setEWalletBalanceText(
+                                      eWalletCurrency === 'VND'
+                                        ? formatVndDigitsInput(e.target.value)
+                                        : e.target.value,
+                                    )
                                   }
                                   placeholder="0"
                                   aria-label={isVi ? 'Số dư Ví điện tử' : 'E-Wallet balance'}
                                   className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
                                 />
-                                <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                                  đ
-                                </span>
+                                <select
+                                  data-testid="welcome-ewallet-currency-select"
+                                  aria-label={isVi ? 'Tiền tệ Ví điện tử' : 'E-Wallet currency'}
+                                  value={eWalletCurrency}
+                                  onChange={(e) =>
+                                    setEWalletCurrency(e.target.value as CurrencyCode)
+                                  }
+                                  className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
+                                >
+                                  {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                               <button
                                 type="button"
@@ -1574,13 +1660,23 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                           {(
                             [
                               {
                                 id: 'credit_card',
                                 labelVi: '💳 Thẻ tín dụng',
                                 labelEn: '💳 Credit Card',
+                              },
+                              {
+                                id: 'bnpl',
+                                labelVi: '🛍️ Ví trả sau (BNPL)',
+                                labelEn: '🛍️ BNPL (SPayLater)',
+                              },
+                              {
+                                id: 'investment',
+                                labelVi: '📈 Đầu tư (Invest)',
+                                labelEn: '📈 Investment',
                               },
                               { id: 'bank', labelVi: '🏦 Ngân hàng', labelEn: '🏦 Bank' },
                               { id: 'e_wallet', labelVi: '📱 Ví điện tử', labelEn: '📱 E-Wallet' },
@@ -1612,9 +1708,17 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                               ? isVi
                                 ? 'VD: Thẻ tín dụng VIB / VPBank / HSBC...'
                                 : 'e.g. Visa Platinum Card...'
-                              : isVi
-                                ? 'VD: Techcombank / ZaloPay / ShopeePay...'
-                                : 'e.g. Secondary Bank / Apple Pay...'
+                              : newWalletType === 'bnpl'
+                                ? isVi
+                                  ? 'VD: Shopee PayLater / Ví Trả Sau MoMo / Kredivo...'
+                                  : 'e.g. Shopee PayLater / GrabPay Later...'
+                                : newWalletType === 'investment'
+                                  ? isVi
+                                    ? 'VD: Chứng khoán SSI / Vàng / Crypto...'
+                                    : 'e.g. Stocks / Gold / Crypto...'
+                                  : isVi
+                                    ? 'VD: Techcombank / ZaloPay / ShopeePay...'
+                                    : 'e.g. Secondary Bank / Apple Pay...'
                           }
                           className="w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--ink-primary)] focus:outline-none"
                         />
@@ -1622,7 +1726,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1.5">
                             <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                              {newWalletType === 'credit_card'
+                              {newWalletType === 'credit_card' || newWalletType === 'bnpl'
                                 ? isVi
                                   ? 'Dư nợ đã tiêu:'
                                   : 'Used debt:'
@@ -1636,33 +1740,50 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                               inputMode="decimal"
                               value={newWalletBalanceText}
                               onChange={(e) =>
-                                setNewWalletBalanceText(formatVndDigitsInput(e.target.value))
+                                setNewWalletBalanceText(
+                                  newWalletCurrency === 'VND'
+                                    ? formatVndDigitsInput(e.target.value)
+                                    : e.target.value,
+                                )
                               }
                               placeholder="0"
                               className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
                             />
-                            <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                              đ
-                            </span>
+                            <select
+                              aria-label={isVi ? 'Tiền tệ ví phụ' : 'Extra wallet currency'}
+                              value={newWalletCurrency}
+                              onChange={(e) => setNewWalletCurrency(e.target.value as CurrencyCode)}
+                              className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
+                            >
+                              {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
                           </div>
 
-                          {newWalletType === 'credit_card' && (
+                          {(newWalletType === 'credit_card' || newWalletType === 'bnpl') && (
                             <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1.5">
                               <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                                {isVi ? 'Hạn mức thẻ:' : 'Card limit:'}
+                                {isVi ? 'Hạn mức:' : 'Credit limit:'}
                               </span>
                               <input
                                 type="text"
                                 inputMode="decimal"
                                 value={newWalletCreditLimitText}
                                 onChange={(e) =>
-                                  setNewWalletCreditLimitText(formatVndDigitsInput(e.target.value))
+                                  setNewWalletCreditLimitText(
+                                    newWalletCurrency === 'VND'
+                                      ? formatVndDigitsInput(e.target.value)
+                                      : e.target.value,
+                                  )
                                 }
                                 placeholder="20.000.000"
                                 className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
                               />
                               <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
-                                đ
+                                {newWalletCurrency}
                               </span>
                             </div>
                           )}

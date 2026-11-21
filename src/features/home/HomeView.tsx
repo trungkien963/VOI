@@ -9,8 +9,10 @@ import {
   Landmark,
   PiggyBank,
   Scale,
+  ShoppingBag,
   Smartphone,
   Sparkles,
+  TrendingUp,
   Users,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -121,6 +123,20 @@ function getAccountTypeMeta(
         bgClass: 'bg-[#D7C3F8]',
         textClass: 'text-[#6E44A3]',
         icon: <CreditCard className="h-4 w-4" />,
+      };
+    case 'investment':
+      return {
+        label: dict.nav.home === 'Trang chủ' ? 'Đầu tư' : 'Investment',
+        bgClass: 'bg-[#CCFBF1]',
+        textClass: 'text-[#0D9488]',
+        icon: <TrendingUp className="h-4 w-4" />,
+      };
+    case 'bnpl':
+      return {
+        label: dict.nav.home === 'Trang chủ' ? 'Ví trả sau (BNPL)' : 'Buy Now Pay Later',
+        bgClass: 'bg-[#FCE7F3]',
+        textClass: 'text-[#DB2777]',
+        icon: <ShoppingBag className="h-4 w-4" />,
       };
     case 'savings':
     default:
@@ -1044,12 +1060,9 @@ export function HomeView(): ReactElement {
               .filter((acc) => acc.type !== 'savings')
               .map((acc) => {
                 const typeMeta = getAccountTypeMeta(acc.type, t);
+                const accPockets = displayPockets.filter((p) => p.account_id === acc.id);
                 const matchingPocket =
-                  displayPockets.find(
-                    (p) => p.account_id === acc.id && (p.currency ?? 'VND') === 'VND',
-                  ) ??
-                  displayPockets.find((p) => p.account_id === acc.id) ??
-                  null;
+                  accPockets.find((p) => (p.currency ?? 'VND') === 'VND') ?? accPockets[0] ?? null;
 
                 return (
                   <li key={acc.id}>
@@ -1072,9 +1085,22 @@ export function HomeView(): ReactElement {
                           {typeMeta.icon}
                         </span>
                         <div>
-                          <p className="text-sm font-bold text-[var(--ink-primary)]">
-                            {getAccountDisplayName(acc, locale)}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-sm font-bold text-[var(--ink-primary)]">
+                              {getAccountDisplayName(acc, locale)}
+                            </p>
+                            {accPockets.map((p) => (
+                              <span
+                                key={p.id}
+                                className="rounded-md bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--ink-secondary)] tabular-nums"
+                              >
+                                {p.currency ?? 'VND'}
+                                {accPockets.length > 1 || (p.currency ?? 'VND') !== 'VND'
+                                  ? `: ${formatMoney(p.cached_balance_minor, p.currency ?? 'VND', { hidden: hideBalances })}`
+                                  : ''}
+                              </span>
+                            ))}
+                          </div>
                           <p className="text-[11px] font-medium text-[var(--ink-secondary)]">
                             {typeMeta.label}
                             {acc.cached_balance_minor === 0 && (

@@ -12,9 +12,11 @@ import {
   Plus,
   RotateCcw,
   Scale,
+  ShoppingBag,
   Smartphone,
   Sparkles,
   Trash2,
+  TrendingUp,
   Users,
   X,
 } from 'lucide-react';
@@ -78,6 +80,24 @@ function getWalletTypeMeta(
         bgClass: 'bg-[#8B5CF6]/12',
         textClass: 'text-[#7C3AED]',
         icon: <CreditCard className="h-4 w-4" />,
+      };
+    case 'investment':
+      return {
+        label:
+          dict.nav.home === 'Trang chủ' ? 'Đầu tư (Chứng khoán / Vàng / Crypto)' : 'Investment',
+        bgClass: 'bg-[#0D9488]/12',
+        textClass: 'text-[#0D9488]',
+        icon: <TrendingUp className="h-4 w-4" />,
+      };
+    case 'bnpl':
+      return {
+        label:
+          dict.nav.home === 'Trang chủ'
+            ? 'Mua trước trả sau (BNPL / SPayLater)'
+            : 'Buy Now Pay Later (BNPL)',
+        bgClass: 'bg-[#EC4899]/14',
+        textClass: 'text-[#DB2777]',
+        icon: <ShoppingBag className="h-4 w-4" />,
       };
     case 'savings':
     default:
@@ -380,7 +400,6 @@ export function AssetsAndDebtsView(): ReactElement {
               <Card.Body className="divide-y divide-[var(--border-hairline)]">
                 {dailyWallets.map((acc) => {
                   const accPockets = pockets.filter((p) => p.account_id === acc.id);
-                  const hasUsd = accPockets.some((p) => (p.currency ?? 'VND') === 'USD');
                   const typeMeta = getWalletTypeMeta(acc.type, t);
 
                   return (
@@ -401,15 +420,21 @@ export function AssetsAndDebtsView(): ReactElement {
                           {typeMeta.icon}
                         </span>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <p className="truncate text-sm font-extrabold text-[var(--ink-primary)]">
                               {acc.name}
                             </p>
-                            {hasUsd && (
-                              <span className="rounded-md bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--ink-secondary)]">
-                                +USD
+                            {accPockets.map((p) => (
+                              <span
+                                key={p.id}
+                                className="rounded-md bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--ink-secondary)] tabular-nums"
+                              >
+                                {p.currency ?? 'VND'}
+                                {accPockets.length > 1 || (p.currency ?? 'VND') !== 'VND'
+                                  ? `: ${formatMoney(p.cached_balance_minor, p.currency ?? 'VND', { hidden: hideBalances })}`
+                                  : ''}
                               </span>
-                            )}
+                            ))}
                           </div>
                           <p className="text-[11px] font-medium text-[var(--ink-secondary)]">
                             {typeMeta.label}
