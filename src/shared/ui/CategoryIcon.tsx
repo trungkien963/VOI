@@ -32,6 +32,17 @@ import {
 } from 'lucide-react';
 import { VoiFlowIcon } from './VoiFlowIcon';
 
+const GEOMETRIC_SHAPE_NAMES = new Set([
+  'triangle',
+  'square',
+  'circle',
+  'diamond',
+  'arch',
+  'hexagon',
+  'pentagon',
+  'rainbow',
+]);
+
 export interface CategoryIconProps {
   slug?: string | null;
   iconName?: string | null;
@@ -129,7 +140,8 @@ export function CategoryIcon({
       return <VoiFlowIcon variant="transfer" size={flowIconPx} />;
     }
 
-    const key = iconName && iconName !== 'circle' ? iconName : slug;
+    const hasCustomIcon = Boolean(iconName && !GEOMETRIC_SHAPE_NAMES.has(iconName));
+    const key = hasCustomIcon ? iconName : slug;
 
     switch (key) {
       case 'utensils':

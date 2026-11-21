@@ -1,5 +1,14 @@
 import { useState, type ReactElement } from 'react';
-import { Check, ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { localDb } from '../../db/dexie-schema';
 import type { Category } from '../../domain/types/entities';
 import { getCategoryDisplayName, useTranslation } from '../i18n';
@@ -54,6 +63,10 @@ export function CategoryGridPicker({
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isManageMode, setIsManageMode] = useState(false);
+  const [pendingDeleteCat, setPendingDeleteCat] = useState<Category | null>(null);
+  const [recentlyDeletedCat, setRecentlyDeletedCat] = useState<Category | null>(null);
+  const [statusToast, setStatusToast] = useState<string | null>(null);
+
   const [isAddingSub, setIsAddingSub] = useState(false);
   const [newSubName, setNewSubName] = useState('');
   const [newSubIcon, setNewSubIcon] = useState('sparkles');
@@ -86,14 +99,28 @@ export function CategoryGridPicker({
     return topSlice;
   })();
 
-  const handleRemoveCategory = async (targetCat: Category): Promise<void> => {
-    if (targetCat.parent_id === null && parentCategories.length <= 1) return;
+  const showTempNotice = (msg: string): void => {
+    setStatusToast(msg);
+  };
+
+  const handleConfirmRemoveCategory = async (): Promise<void> => {
+    if (!pendingDeleteCat) return;
+    const targetCat = pendingDeleteCat;
+    if (targetCat.parent_id === null && parentCategories.length <= 1) {
+      setPendingDeleteCat(null);
+      return;
+    }
+    const displayName = getCategoryDisplayName(targetCat, t);
     const nowIso = new Date().toISOString();
     await localDb.categories.put({
       ...targetCat,
       archived_at: nowIso,
       updated_at: nowIso,
     });
+    setPendingDeleteCat(null);
+    setRecentlyDeletedCat(targetCat);
+    showTempNotice(isVi ? `Đã xoá danh mục "${displayName}"` : `Removed category "${displayName}"`);
+
     if (selectedCategoryId === targetCat.id || activeParentId === targetCat.id) {
       const nextFallback =
         targetCat.parent_id !== null
@@ -103,6 +130,22 @@ export function CategoryGridPicker({
         onSelectCategory(nextFallback);
       }
     }
+  };
+
+  const handleUndoRemoveCategory = async (): Promise<void> => {
+    if (!recentlyDeletedCat) return;
+    const nowIso = new Date().toISOString();
+    await localDb.categories.put({
+      ...recentlyDeletedCat,
+      archived_at: null,
+      updated_at: nowIso,
+    });
+    const displayName = getCategoryDisplayName(recentlyDeletedCat, t);
+    onSelectCategory(recentlyDeletedCat.id);
+    setRecentlyDeletedCat(null);
+    showTempNotice(
+      isVi ? `Đã khôi phục danh mục "${displayName}"` : `Restored category "${displayName}"`,
+    );
   };
 
   const handleCreateSubcategory = async (): Promise<void> => {
@@ -135,6 +178,8 @@ export function CategoryGridPicker({
     await localDb.categories.put(newSub);
     setNewSubName('');
     setIsAddingSub(false);
+    setRecentlyDeletedCat(null);
+    showTempNotice(isVi ? `Đã thêm mục con "${clean}" ✨` : `Added subcategory "${clean}" ✨`);
     onSelectCategory(newSub.id);
   };
 
@@ -174,11 +219,89 @@ export function CategoryGridPicker({
     await localDb.categories.put(newCat);
     setNewParentName('');
     setIsAddingParent(false);
+    setRecentlyDeletedCat(null);
+    showTempNotice(isVi ? `Đã tạo danh mục "${clean}" ✨` : `Created category "${clean}" ✨`);
     onSelectCategory(newCat.id);
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+      {/* Status Notification / Undo Banner */}
+      {statusToast && (
+        <div
+          data-testid="category-status-toast"
+          className="flex items-center justify-between gap-2 rounded-xl border border-[#191919]/15 bg-[#191919] px-3 py-1.5 text-xs font-bold text-[#FAFAFA]"
+        >
+          <span className="truncate">{statusToast}</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {recentlyDeletedCat && (
+              <button
+                type="button"
+                data-testid="category-undo-delete-btn"
+                onClick={() => void handleUndoRemoveCategory()}
+                className="inline-flex items-center gap-1 rounded-full bg-[#FAFAFA] px-2 py-0.5 text-[10px] font-black text-[#191919]"
+              >
+                <RotateCcw className="h-2.5 w-2.5" />
+                <span>{isVi ? 'Hoàn tác' : 'Undo'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusToast(null);
+                setRecentlyDeletedCat(null);
+              }}
+              aria-label={isVi ? 'Đóng thông báo' : 'Dismiss'}
+              className="rounded-full p-0.5 text-[#FAFAFA]/75 hover:text-[#FAFAFA]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog before Deleting Category / Subcategory */}
+      {pendingDeleteCat && (
+        <div
+          data-testid="category-delete-confirm-banner"
+          className="space-y-2 rounded-2xl border-2 border-[#D93829] bg-[#FEF2F2] p-3 text-xs"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#D93829]" />
+            <div className="min-w-0 flex-1">
+              <p className="font-black text-[#191919]">
+                {isVi
+                  ? `Xác nhận xoá ${pendingDeleteCat.parent_id ? 'mục con' : 'danh mục'} "${getCategoryDisplayName(pendingDeleteCat, t)}"?`
+                  : `Remove ${pendingDeleteCat.parent_id ? 'subcategory' : 'category'} "${getCategoryDisplayName(pendingDeleteCat, t)}"?`}
+              </p>
+              <p className="mt-0.5 text-[11px] font-medium text-[#191919]/75">
+                {isVi
+                  ? 'Các giao dịch cũ thuộc mục này vẫn được giữ nguyên trong Sổ cái.'
+                  : 'Past transactions in this category will remain intact in your Ledger.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              data-testid="category-delete-cancel-btn"
+              onClick={() => setPendingDeleteCat(null)}
+              className="rounded-xl border border-[#191919]/20 bg-white px-3 py-1.5 text-xs font-extrabold text-[#191919]"
+            >
+              {isVi ? 'Huỷ' : 'Cancel'}
+            </button>
+            <button
+              type="button"
+              data-testid="category-delete-confirm-btn"
+              onClick={() => void handleConfirmRemoveCategory()}
+              className="rounded-xl bg-[#D93829] px-3 py-1.5 text-xs font-extrabold text-white shadow-2xs"
+            >
+              {isVi ? 'Xác nhận xoá' : 'Confirm Remove'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         role="listbox"
         aria-label={t.quickAddModal.categoryAria}
@@ -187,7 +310,7 @@ export function CategoryGridPicker({
         {displayedParents.map((cat) => {
           const isParentActive = cat.id === activeParentId;
           const displayName = getCategoryDisplayName(cat, t);
-          const canDeleteParent = parentCategories.length > 1 && (!cat.is_system || isManageMode);
+          const canDeleteParent = parentCategories.length > 1 && isManageMode;
 
           return (
             <div key={cat.id} className="relative">
@@ -195,7 +318,13 @@ export function CategoryGridPicker({
                 type="button"
                 role="option"
                 aria-selected={isParentActive}
-                onClick={() => onSelectCategory(cat.id)}
+                onClick={() => {
+                  if (isManageMode && parentCategories.length > 1) {
+                    setPendingDeleteCat(cat);
+                    return;
+                  }
+                  onSelectCategory(cat.id);
+                }}
                 style={{
                   backgroundColor: isParentActive ? `${cat.color_hex}2E` : `${cat.color_hex}14`,
                   borderColor: isParentActive ? '#191919' : `${cat.color_hex}4D`,
@@ -215,19 +344,19 @@ export function CategoryGridPicker({
                 </span>
               </button>
 
-              {canDeleteParent && (isManageMode || !cat.is_system) && (
+              {canDeleteParent && (
                 <button
                   type="button"
                   data-testid={`remove-category-${cat.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    void handleRemoveCategory(cat);
+                    setPendingDeleteCat(cat);
                   }}
                   aria-label={isVi ? `Xoá danh mục ${displayName}` : `Remove ${displayName}`}
                   title={isVi ? `Xoá ${displayName}` : `Remove ${displayName}`}
-                  className="absolute -top-1 -right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[#191919]/20 bg-[#FFFFFF] text-[#D93829] shadow-2xs transition hover:bg-[#D93829] hover:text-white"
+                  className="absolute -top-1 -right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-[#191919]/20 bg-[#D93829] text-white shadow-xs transition hover:scale-110"
                 >
-                  <X className="h-3 w-3 stroke-[2.6]" />
+                  <X className="h-3 w-3 stroke-[2.8]" />
                 </button>
               )}
             </div>
@@ -257,9 +386,17 @@ export function CategoryGridPicker({
           <>
             <button
               type="button"
-              onClick={() => setIsAddingParent((v) => !v)}
+              onClick={() => {
+                setIsAddingParent((v) => !v);
+                setIsAddingSub(false);
+                setIsManageMode(false);
+              }}
               data-testid="quick-add-parent-category-btn"
-              className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-subtle)]/50 px-1.5 py-2 text-center text-[var(--ink-secondary)] transition hover:border-[#191919] hover:text-[var(--ink-primary)]"
+              className={`flex flex-col items-center justify-center gap-1 rounded-2xl border px-1.5 py-2 text-center transition ${
+                isAddingParent
+                  ? 'border-2 border-[#191919] bg-[var(--bg-subtle)] text-[var(--ink-primary)]'
+                  : 'border-dashed border-[var(--border-strong)] bg-[var(--bg-subtle)]/50 text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
+              }`}
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--bg-card)]">
                 <Plus className="h-4 w-4" />
@@ -272,10 +409,14 @@ export function CategoryGridPicker({
             <button
               type="button"
               data-testid="category-grid-manage-btn"
-              onClick={() => setIsManageMode((v) => !v)}
+              onClick={() => {
+                setIsManageMode((v) => !v);
+                setPendingDeleteCat(null);
+                setIsAddingParent(false);
+              }}
               className={`flex flex-col items-center justify-center gap-1 rounded-2xl border px-1.5 py-2 text-center transition ${
                 isManageMode
-                  ? 'border-[#D93829] bg-[#FEE2E2] text-[#D93829]'
+                  ? 'border-2 border-[#D93829] bg-[#FEE2E2] text-[#D93829]'
                   : 'border-dashed border-[var(--border-strong)] bg-[var(--bg-subtle)]/50 text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
               }`}
             >
@@ -295,6 +436,7 @@ export function CategoryGridPicker({
                   setIsExpanded(false);
                   setIsAddingParent(false);
                   setIsManageMode(false);
+                  setPendingDeleteCat(null);
                 }}
                 className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-1.5 py-2 text-center text-[var(--ink-secondary)] transition hover:border-[#191919] hover:text-[var(--ink-primary)]"
               >
@@ -310,10 +452,27 @@ export function CategoryGridPicker({
         )}
       </div>
 
+      {/* Friendly Inline Card for Creating a New Parent Category */}
       {isAddingParent && (
-        <div className="space-y-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-2.5">
-          <div className="flex items-center gap-1.5">
-            <CategoryIcon iconName={newParentIcon} colorHex={newParentColor} size="sm" />
+        <div className="space-y-2.5 rounded-2xl border-2 border-[#191919] bg-[var(--bg-subtle)] p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-[var(--ink-primary)]">
+              {isVi ? 'Tạo danh mục mới' : 'Create new category'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddingParent(false);
+                setNewParentName('');
+              }}
+              className="rounded-full p-1 text-[var(--ink-secondary)] hover:bg-[var(--bg-card)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <CategoryIcon iconName={newParentIcon} colorHex={newParentColor} size="md" />
             <div className="relative min-w-0 flex-1">
               <input
                 type="text"
@@ -322,54 +481,47 @@ export function CategoryGridPicker({
                 onChange={(e) =>
                   setNewParentName(e.target.value.slice(0, MAX_CATEGORY_NAME_LENGTH))
                 }
-                placeholder={
-                  isVi ? 'Tên danh mục mới (tối đa 22 ký tự)...' : 'New category (max 22 chars)...'
-                }
-                className="w-full rounded-lg bg-[var(--bg-card)] px-2.5 py-1.5 pr-11 text-xs font-semibold text-[var(--ink-primary)] focus:outline-none"
+                placeholder={isVi ? 'Tên danh mục (VD: Thú cưng)...' : 'Category name...'}
+                className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-2 pr-12 text-xs font-bold text-[var(--ink-primary)] focus:border-[#191919] focus:outline-none"
               />
-              <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
+              <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[10px] font-bold text-[var(--ink-muted)] tabular-nums">
                 {newParentName.length}/{MAX_CATEGORY_NAME_LENGTH}
               </span>
             </div>
             <button
               type="button"
               onClick={() => void handleCreateParentCategory()}
-              className="inline-flex items-center gap-1 rounded-lg bg-[#191919] px-2.5 py-1.5 text-[11px] font-bold text-[#FAFAFA]"
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-[#191919] px-3 py-2 text-xs font-extrabold text-[#FAFAFA]"
             >
               <Check className="h-3.5 w-3.5" />
               <span>{isVi ? 'Lưu' : 'Add'}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddingParent(false);
-                setNewParentName('');
-              }}
-              className="rounded-lg p-1 text-[var(--ink-secondary)]"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
           </div>
 
-          {/* Color & Icon Picker for New Category */}
-          <div className="flex items-center justify-between gap-2 pt-0.5">
-            <div className="flex items-center gap-1">
-              {CATEGORY_COLOR_CHOICES.map((hex) => (
-                <button
-                  key={hex}
-                  type="button"
-                  aria-label={`Color ${hex}`}
-                  onClick={() => setNewParentColor(hex)}
-                  style={{ backgroundColor: hex }}
-                  className={`h-5 w-5 rounded-full transition ${
-                    newParentColor === hex ? 'scale-110 ring-2 ring-[#191919]' : 'opacity-75'
-                  }`}
-                />
-              ))}
-            </div>
+          {/* Color Swatches */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[var(--ink-secondary)]">
+              {isVi ? 'Màu:' : 'Color:'}
+            </span>
+            {CATEGORY_COLOR_CHOICES.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                aria-label={`Color ${hex}`}
+                onClick={() => setNewParentColor(hex)}
+                style={{ backgroundColor: hex }}
+                className={`h-5 w-5 rounded-full transition ${
+                  newParentColor === hex ? 'scale-110 ring-2 ring-[#191919]' : 'opacity-75'
+                }`}
+              />
+            ))}
           </div>
 
-          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+          {/* Visual Icon Row (No raw English names!) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <span className="shrink-0 text-[10px] font-bold text-[var(--ink-secondary)]">
+              {isVi ? 'Icon:' : 'Icon:'}
+            </span>
             {CATEGORY_ICON_CHOICES.map((iconKey) => {
               const activeIcon = newParentIcon === iconKey;
               return (
@@ -381,7 +533,7 @@ export function CategoryGridPicker({
                   onClick={() => setNewParentIcon(iconKey)}
                   className={`shrink-0 rounded-xl p-1 transition ${
                     activeIcon
-                      ? 'bg-[#191919] text-white ring-1 ring-[#191919]'
+                      ? 'bg-[#191919] ring-1 ring-[#191919]'
                       : 'bg-[var(--bg-card)] opacity-80 hover:opacity-100'
                   }`}
                 >
@@ -393,106 +545,149 @@ export function CategoryGridPicker({
         </div>
       )}
 
+      {/* Subcategories Horizontal Bar */}
       {activeParent && (
-        <div
-          data-testid="subcategory-pills"
-          className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/70 px-2 py-1.5"
-        >
-          {subCategories.map((sub) => {
-            const isSubSelected = sub.id === selectedCategoryId;
-            const subName = getCategoryDisplayName(sub, t);
-            return (
-              <div key={sub.id} className="inline-flex shrink-0 items-center">
-                <button
-                  type="button"
-                  onClick={() => onSelectCategory(sub.id)}
-                  style={
-                    isSubSelected
-                      ? { backgroundColor: '#191919', borderColor: '#191919', color: '#FAFAFA' }
-                      : {
-                          backgroundColor: `${sub.color_hex}18`,
-                          borderColor: `${sub.color_hex}4D`,
-                        }
-                  }
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] transition ${
-                    isSubSelected
-                      ? 'font-bold text-[#FAFAFA]'
-                      : 'font-bold text-[var(--ink-primary)] hover:opacity-90'
-                  }`}
-                >
-                  <CategoryIcon
-                    slug={sub.slug}
-                    iconName={sub.icon_name}
-                    colorHex={sub.color_hex}
-                    size="xs"
-                  />
-                  <span>{subName}</span>
-                </button>
-                {(isManageMode || !sub.is_system) && (
+        <div className="space-y-1.5">
+          <div
+            data-testid="subcategory-pills"
+            className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/70 px-2 py-1.5"
+          >
+            {subCategories.map((sub) => {
+              const isSubSelected = sub.id === selectedCategoryId;
+              const subName = getCategoryDisplayName(sub, t);
+              return (
+                <div key={sub.id} className="inline-flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => void handleRemoveCategory(sub)}
-                    aria-label={isVi ? `Xoá mục con ${subName}` : `Remove ${subName}`}
-                    className="-ml-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-[#191919]/20 bg-white text-[#D93829] shadow-2xs hover:bg-[#D93829] hover:text-white"
+                    onClick={() => {
+                      if (isManageMode) {
+                        setPendingDeleteCat(sub);
+                        return;
+                      }
+                      onSelectCategory(sub.id);
+                    }}
+                    style={
+                      isSubSelected
+                        ? { backgroundColor: '#191919', borderColor: '#191919', color: '#FAFAFA' }
+                        : {
+                            backgroundColor: `${sub.color_hex}18`,
+                            borderColor: `${sub.color_hex}4D`,
+                          }
+                    }
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition ${
+                      isSubSelected
+                        ? 'font-bold text-[#FAFAFA]'
+                        : 'font-bold text-[var(--ink-primary)] hover:opacity-90'
+                    }`}
                   >
-                    <X className="h-2.5 w-2.5 stroke-[2.6]" />
+                    <CategoryIcon
+                      slug={sub.slug}
+                      iconName={sub.icon_name}
+                      colorHex={sub.color_hex}
+                      size="xs"
+                    />
+                    <span>{subName}</span>
                   </button>
-                )}
-              </div>
-            );
-          })}
+                  {isManageMode && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteCat(sub)}
+                      aria-label={isVi ? `Xoá mục con ${subName}` : `Remove ${subName}`}
+                      className="flex h-4 w-4 items-center justify-center rounded-full bg-[#D93829] text-white shadow-2xs"
+                    >
+                      <X className="h-2.5 w-2.5 stroke-[2.8]" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
 
-          {isAddingSub ? (
-            <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#191919] bg-[var(--bg-card)] px-2 py-0.5">
-              <select
-                aria-label={isVi ? 'Icon mục con' : 'Subcategory icon'}
-                value={newSubIcon}
-                onChange={(e) => setNewSubIcon(e.target.value)}
-                className="bg-transparent text-[10px] font-bold text-[var(--ink-primary)] focus:outline-none"
-              >
-                {CATEGORY_ICON_CHOICES.map((ic) => (
-                  <option key={ic} value={ic}>
-                    {ic}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                maxLength={MAX_CATEGORY_NAME_LENGTH}
-                value={newSubName}
-                onChange={(e) => setNewSubName(e.target.value.slice(0, MAX_CATEGORY_NAME_LENGTH))}
-                placeholder={isVi ? 'Tên mục con...' : 'Subcategory...'}
-                className="w-24 bg-transparent text-[10px] font-bold text-[var(--ink-primary)] focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => void handleCreateSubcategory()}
-                className="rounded-full bg-[#191919] p-0.5 text-[#FAFAFA]"
-                aria-label={isVi ? 'Lưu mục con' : 'Save subcategory'}
-              >
-                <Check className="h-3 w-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingSub(false);
-                  setNewSubName('');
-                }}
-                className="p-0.5 text-[var(--ink-secondary)]"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ) : (
             <button
               type="button"
               data-testid="quick-add-subcategory-btn"
-              onClick={() => setIsAddingSub(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 py-1 text-[10px] font-bold text-[var(--ink-secondary)] transition hover:border-[#191919] hover:text-[var(--ink-primary)]"
+              onClick={() => {
+                setIsAddingSub((v) => !v);
+                setIsAddingParent(false);
+              }}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                isAddingSub
+                  ? 'border-[#191919] bg-[#191919] text-[#FAFAFA]'
+                  : 'border-dashed border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
+              }`}
             >
               <Plus className="h-3 w-3" />
               <span>{isVi ? '+ Mục con' : '+ Sub'}</span>
             </button>
+          </div>
+
+          {/* Clean, Visual Subcategory Creator Card (Replaces the cramped raw "utensils v" pill!) */}
+          {isAddingSub && (
+            <div className="space-y-2 rounded-2xl border border-[#191919] bg-[var(--bg-subtle)] p-2.5">
+              <div className="flex items-center gap-2">
+                <CategoryIcon iconName={newSubIcon} colorHex={activeParent.color_hex} size="sm" />
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    type="text"
+                    maxLength={MAX_CATEGORY_NAME_LENGTH}
+                    value={newSubName}
+                    onChange={(e) =>
+                      setNewSubName(e.target.value.slice(0, MAX_CATEGORY_NAME_LENGTH))
+                    }
+                    placeholder={
+                      isVi
+                        ? `Thêm mục con vào "${getCategoryDisplayName(activeParent, t)}"...`
+                        : `New subcategory in "${getCategoryDisplayName(activeParent, t)}"...`
+                    }
+                    className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-1.5 pr-11 text-xs font-bold text-[var(--ink-primary)] focus:border-[#191919] focus:outline-none"
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
+                    {newSubName.length}/{MAX_CATEGORY_NAME_LENGTH}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateSubcategory()}
+                  aria-label={isVi ? 'Lưu mục con' : 'Save subcategory'}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-[#191919] px-2.5 py-1.5 text-xs font-extrabold text-[#FAFAFA]"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>{isVi ? 'Lưu' : 'Save'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingSub(false);
+                    setNewSubName('');
+                  }}
+                  className="rounded-lg p-1 text-[var(--ink-secondary)] hover:bg-[var(--bg-card)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                <span className="shrink-0 text-[10px] font-bold text-[var(--ink-secondary)]">
+                  {isVi ? 'Chọn icon:' : 'Pick icon:'}
+                </span>
+                {CATEGORY_ICON_CHOICES.map((ic) => {
+                  const activeIc = newSubIcon === ic;
+                  return (
+                    <button
+                      key={ic}
+                      type="button"
+                      onClick={() => setNewSubIcon(ic)}
+                      className={`shrink-0 rounded-xl p-1 transition ${
+                        activeIc
+                          ? 'bg-[#191919] ring-1 ring-[#191919]'
+                          : 'bg-[var(--bg-card)] opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      <CategoryIcon iconName={ic} colorHex={activeParent.color_hex} size="xs" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}

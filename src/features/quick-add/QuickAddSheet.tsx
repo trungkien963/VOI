@@ -237,7 +237,8 @@ export function QuickAddSheet(): ReactElement {
       })
     : null;
 
-  const handleQuickInputChange = (val: string): void => {
+  const handleQuickInputChange = (rawVal: string): void => {
+    const val = rawVal.slice(0, 250);
     setQuickInputText(val);
     const trimmed = val.trim();
     if (!trimmed) return;
@@ -676,73 +677,40 @@ export function QuickAddSheet(): ReactElement {
             </>
           )}
 
-          {/* Horizontal Slide/Click Source Wallet + Currency Pills */}
-          <div className="flex items-center gap-1.5">
-            <div
-              data-testid="quick-add-visual-pocket-bar"
-              className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5"
-            >
-              {pockets.map((p) => {
-                const isSelected = p.id === sourcePocket?.id;
-                const meta = getPocketVisualLabel(p);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    data-testid={`quick-add-pocket-pill-${p.id}`}
-                    onClick={() => setSourcePocketId(p.id)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs transition ${
+          {/* Full-Width Horizontal Slide/Click Source Wallet + Currency Pills */}
+          <div
+            data-testid="quick-add-visual-pocket-bar"
+            className="flex items-center gap-1.5 overflow-x-auto py-0.5"
+          >
+            {pockets.map((p) => {
+              const isSelected = p.id === sourcePocket?.id;
+              const meta = getPocketVisualLabel(p);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-testid={`quick-add-pocket-pill-${p.id}`}
+                  onClick={() => setSourcePocketId(p.id)}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
+                    isSelected
+                      ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
+                      : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
+                  }`}
+                >
+                  {renderAccountTypeGlyph(meta.accType)}
+                  <span className="max-w-[130px] truncate">{meta.walletName}</span>
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
                       isSelected
-                        ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
-                        : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
+                        ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
+                        : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
                     }`}
                   >
-                    {renderAccountTypeGlyph(meta.accType)}
-                    <span className="max-w-[110px] truncate">{meta.walletName}</span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
-                        isSelected
-                          ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
-                          : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
-                      }`}
-                    >
-                      {meta.currency}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {kind !== 'transfer' && (
-              <div className="w-[116px] shrink-0">
-                <label htmlFor="quick-add-txn-date" className="sr-only">
-                  {isVi ? 'Ngày giao dịch' : 'Date'}
-                </label>
-                <input
-                  id="quick-add-txn-date"
-                  type="date"
-                  value={txnDateIso}
-                  onChange={(e) => setTxnDateIso(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1.5 text-[11px] font-semibold text-[var(--ink-primary)] tabular-nums"
-                />
-              </div>
-            )}
-
-            {!editingTransactionId && kind === 'expense' && (
-              <button
-                type="button"
-                data-testid="quick-add-split-toggle"
-                onClick={() => setIsSplitBill((prev) => !prev)}
-                className={`flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold transition ${
-                  isSplitBill
-                    ? 'border-[#141413] bg-[#141413] text-white'
-                    : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
-                }`}
-              >
-                <VoiFlowIcon variant="lend-borrow" size={16} />
-                <span>{isVi ? 'Chia bill' : 'Split'}</span>
-              </button>
-            )}
+                    {meta.currency}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Horizontal Slide/Click Destination Wallet + Currency Pills (when in Transfer mode) */}
@@ -762,14 +730,14 @@ export function QuickAddSheet(): ReactElement {
                       type="button"
                       data-testid={`quick-add-dest-pocket-pill-${p.id}`}
                       onClick={() => setDestPocketId(p.id)}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs transition ${
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1 text-xs transition ${
                         isSelected
                           ? 'border-2 border-[#2563EB] bg-[#2563EB] font-extrabold text-white'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#2563EB]'
                       }`}
                     >
                       {renderAccountTypeGlyph(meta.accType)}
-                      <span className="max-w-[110px] truncate">{meta.walletName}</span>
+                      <span className="max-w-[130px] truncate">{meta.walletName}</span>
                       <span
                         className={`rounded-md px-1.5 py-0.5 text-[10px] font-black ${
                           isSelected
@@ -920,75 +888,17 @@ export function QuickAddSheet(): ReactElement {
           </div>
         )}
 
-        {/* Prominent Smart Content / Note Input Card (Unified Earn/Cost Toggle + Multi-line Auto-Expand Downward) */}
+        {/* Clean, Friendly Smart Content / Note Input Card (Auto-expands downward, max 250 chars) */}
         <div
           style={{ borderColor: `${activeBuddy.characterFillHex}55` }}
-          className="space-y-2 rounded-2xl border-2 bg-[var(--bg-card)] p-3 shadow-2xs"
+          className="space-y-2 rounded-2xl border-2 bg-[var(--bg-card)] p-2.5 shadow-2xs"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label
-              htmlFor="quick-add-smart-note-input"
-              className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide text-[var(--ink-primary)] uppercase"
-            >
-              <VoiFlowIcon
-                variant={
-                  kind === 'income'
-                    ? 'income'
-                    : kind === 'transfer'
-                      ? 'transfer'
-                      : isSplitBill
-                        ? 'lend-borrow'
-                        : 'expense'
-                }
-                size={20}
-              />
-              <span>
-                {kind !== 'transfer'
-                  ? isVi
-                    ? 'Ghi nhanh Thu / Chi'
-                    : 'Unified Earn / Cost Input'
-                  : isVi
-                    ? 'Nội dung chuyển khoản'
-                    : 'Transfer Note'}
-              </span>
-            </label>
-
-            <div className="flex items-center gap-1.5">
-              {/* Inline 1-Tap Unified Cost (-) / Earn (+) Quick Flip Pill */}
-              {kind !== 'transfer' && (
-                <div
-                  data-testid="unified-earn-cost-pill"
-                  className="inline-flex items-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-0.5 text-[10px] font-black"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleKindChange('expense')}
-                    className={`rounded-full px-2 py-0.5 transition ${
-                      kind === 'expense'
-                        ? 'bg-[#FF6B35] text-white shadow-2xs'
-                        : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-                    }`}
-                  >
-                    {isVi ? '− Chi' : '− Cost'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleKindChange('income')}
-                    className={`rounded-full px-2 py-0.5 transition ${
-                      kind === 'income'
-                        ? 'bg-[#10B981] text-white shadow-2xs'
-                        : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-                    }`}
-                  >
-                    {isVi ? '+ Thu' : '+ Earn'}
-                  </button>
-                </div>
-              )}
-
-              {kind !== 'transfer' && matchedCat && (
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {kind !== 'transfer' && matchedCat ? (
                 <span
                   style={{ backgroundColor: `${matchedCat.color_hex}24` }}
-                  className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-[#191919]/15 px-2 py-0.5 text-[10px] font-extrabold text-[#191919]"
+                  className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-[#191919]/15 px-2.5 py-0.5 text-[11px] font-extrabold text-[#191919]"
                 >
                   <CategoryIcon
                     slug={matchedCat.slug}
@@ -1001,6 +911,47 @@ export function QuickAddSheet(): ReactElement {
                     {getCategoryDisplayName(matchedCat, t)}
                   </span>
                 </span>
+              ) : (
+                <label
+                  htmlFor="quick-add-smart-note-input"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide text-[var(--ink-primary)] uppercase"
+                >
+                  <VoiFlowIcon variant="transfer" size={18} />
+                  <span>{isVi ? 'Nội dung chuyển khoản' : 'Transfer Note'}</span>
+                </label>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              {kind !== 'transfer' && (
+                <div>
+                  <label htmlFor="quick-add-txn-date" className="sr-only">
+                    {isVi ? 'Ngày giao dịch' : 'Date'}
+                  </label>
+                  <input
+                    id="quick-add-txn-date"
+                    type="date"
+                    value={txnDateIso}
+                    onChange={(e) => setTxnDateIso(e.target.value)}
+                    className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2 py-1 text-[11px] font-bold text-[var(--ink-primary)] tabular-nums"
+                  />
+                </div>
+              )}
+
+              {!editingTransactionId && kind === 'expense' && (
+                <button
+                  type="button"
+                  data-testid="quick-add-split-toggle"
+                  onClick={() => setIsSplitBill((prev) => !prev)}
+                  className={`flex shrink-0 items-center gap-1 rounded-xl border px-2 py-1 text-[11px] font-extrabold transition ${
+                    isSplitBill
+                      ? 'border-[#141413] bg-[#141413] text-white'
+                      : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] hover:border-[var(--border-strong)]'
+                  }`}
+                >
+                  <VoiFlowIcon variant="lend-borrow" size={15} />
+                  <span>{isVi ? 'Chia bill' : 'Split'}</span>
+                </button>
               )}
             </div>
           </div>
@@ -1009,23 +960,31 @@ export function QuickAddSheet(): ReactElement {
             <textarea
               id="quick-add-smart-note-input"
               data-testid="quick-add-smart-note-input"
-              rows={2}
+              rows={quickInputText.length > 42 || quickInputText.includes('\n') ? 3 : 1}
+              maxLength={250}
               value={quickInputText}
               onChange={(e) => handleQuickInputChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={smartInputPlaceholder}
-              className="min-h-[56px] w-full resize-y rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3.5 py-2 pr-9 text-base leading-snug font-extrabold text-[var(--ink-primary)] placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
+              className="w-full resize-none rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 pr-14 text-sm leading-snug font-extrabold text-[var(--ink-primary)] transition-all placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
             />
-            {quickInputText.trim().length > 0 && (
-              <button
-                type="button"
-                onClick={() => setQuickInputText('')}
-                aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
-                className="absolute top-2.5 right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
+              {quickInputText.length > 0 && (
+                <span className="text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
+                  {quickInputText.length}/250
+                </span>
+              )}
+              {quickInputText.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuickInputText('')}
+                  aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
 
           {!quickInputText.trim() ? (
