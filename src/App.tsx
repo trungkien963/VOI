@@ -1,7 +1,7 @@
 import { useEffect, type ReactElement } from 'react';
 import { AppShell } from './app/AppShell';
 import { useUiStore } from './app/ui-store';
-import { ensureSeedData, requestPersistentStorage } from './db/dexie-schema';
+import { ensureSeedData, localDb, requestPersistentStorage } from './db/dexie-schema';
 import { PrivacyBlurAndLockOverlay } from './features/security/PrivacyBlurAndLockOverlay';
 
 export function App(): ReactElement {
@@ -13,6 +13,11 @@ export function App(): ReactElement {
     if (!state.hasCompletedWelcome) {
       state.setLocale('vi');
       state.openWelcomeModal('cover');
+      void localDb.transactions.count().then((txCount) => {
+        if (txCount > 0 && useUiStore.getState().isWelcomeOpen) {
+          useUiStore.getState().closeWelcomeModal();
+        }
+      });
     }
   }, []);
 
