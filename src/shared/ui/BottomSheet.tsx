@@ -8,6 +8,7 @@ export interface BottomSheetProps {
   titleId: string;
   closeLabel: string;
   headerAccessory?: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
 }
 
@@ -18,6 +19,7 @@ export function BottomSheet({
   titleId,
   closeLabel,
   headerAccessory,
+  footer,
   children,
 }: BottomSheetProps): ReactElement | null {
   useEffect(() => {
@@ -66,6 +68,15 @@ export function BottomSheet({
         <div className="mt-3 -mx-1 -my-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
           {children}
         </div>
+
+        {footer && (
+          <div
+            data-testid="bottom-sheet-sticky-footer"
+            className="mt-2.5 shrink-0 border-t border-[var(--border-hairline)] bg-[var(--bg-card)] pt-2.5"
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -28,8 +28,10 @@ import { transactionRepository } from '../../db/repositories/transaction-reposit
 import { mergeSystemAndLiveCategories } from '../../domain/categories/default-categories';
 import { getLedgerStrategy } from '../../domain/ledger/strategies';
 import {
+  ALL_CURRENCIES,
   convertMinorToBase,
   formatMoney,
+  formatNumberInputLive,
   parseFlexibleMoneyInput,
   type CurrencyCode,
 } from '../../domain/money/currency';
@@ -166,16 +168,7 @@ export interface ExtraWalletDraft {
   creditLimitText: string;
 }
 
-const ONBOARDING_CURRENCY_OPTIONS: ReadonlyArray<CurrencyCode> = [
-  'VND',
-  'USD',
-  'TWD',
-  'EUR',
-  'JPY',
-  'SGD',
-  'KRW',
-  'THB',
-];
+const ONBOARDING_CURRENCY_OPTIONS: ReadonlyArray<CurrencyCode> = ALL_CURRENCIES;
 
 const DEFAULT_CORE_CATEGORY_IDS = [
   '10000000-0000-4000-8000-000000000001', // Ăn uống
@@ -502,9 +495,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
     const cleaned = raw.trim();
     if (!cleaned) return '';
     if (/[a-zA-Z]/.test(cleaned)) return raw;
-    const digits = cleaned.replace(/[^\d]/g, '');
-    if (!digits) return '';
-    return new Intl.NumberFormat('vi-VN').format(Number(digits));
+    return formatNumberInputLive(raw, useUiStore.getState().numberFormat);
   };
 
   useEffect(() => {
@@ -1274,11 +1265,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={openingBalanceText}
                                   onFocus={() => setActiveWalletTarget('bank')}
                                   onChange={(e) =>
-                                    setOpeningBalanceText(
-                                      bankCurrency === 'VND'
-                                        ? formatVndDigitsInput(e.target.value)
-                                        : e.target.value,
-                                    )
+                                    setOpeningBalanceText(formatVndDigitsInput(e.target.value))
                                   }
                                   placeholder="5.000.000"
                                   className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
@@ -1289,7 +1276,11 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                     isVi ? 'Tiền tệ Tài khoản Ngân hàng' : 'Bank account currency'
                                   }
                                   value={bankCurrency}
-                                  onChange={(e) => setBankCurrency(e.target.value as CurrencyCode)}
+                                  onChange={(e) => {
+                                    const nextC = e.target.value as CurrencyCode;
+                                    setBankCurrency(nextC);
+                                    useUiStore.getState().addEnabledCurrency(nextC);
+                                  }}
                                   className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
                                 >
                                   {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
@@ -1374,11 +1365,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={cashBalanceText}
                                   onFocus={() => setActiveWalletTarget('cash')}
                                   onChange={(e) =>
-                                    setCashBalanceText(
-                                      cashCurrency === 'VND'
-                                        ? formatVndDigitsInput(e.target.value)
-                                        : e.target.value,
-                                    )
+                                    setCashBalanceText(formatVndDigitsInput(e.target.value))
                                   }
                                   placeholder="0"
                                   aria-label={isVi ? 'Số dư Ví tiền mặt' : 'Cash balance'}
@@ -1388,7 +1375,11 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   data-testid="welcome-cash-currency-select"
                                   aria-label={isVi ? 'Tiền tệ Ví tiền mặt' : 'Cash wallet currency'}
                                   value={cashCurrency}
-                                  onChange={(e) => setCashCurrency(e.target.value as CurrencyCode)}
+                                  onChange={(e) => {
+                                    const nextC = e.target.value as CurrencyCode;
+                                    setCashCurrency(nextC);
+                                    useUiStore.getState().addEnabledCurrency(nextC);
+                                  }}
                                   className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
                                 >
                                   {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
@@ -1477,11 +1468,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   value={eWalletBalanceText}
                                   onFocus={() => setActiveWalletTarget('momo')}
                                   onChange={(e) =>
-                                    setEWalletBalanceText(
-                                      eWalletCurrency === 'VND'
-                                        ? formatVndDigitsInput(e.target.value)
-                                        : e.target.value,
-                                    )
+                                    setEWalletBalanceText(formatVndDigitsInput(e.target.value))
                                   }
                                   placeholder="0"
                                   aria-label={isVi ? 'Số dư Ví điện tử' : 'E-Wallet balance'}
@@ -1491,9 +1478,11 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                   data-testid="welcome-ewallet-currency-select"
                                   aria-label={isVi ? 'Tiền tệ Ví điện tử' : 'E-Wallet currency'}
                                   value={eWalletCurrency}
-                                  onChange={(e) =>
-                                    setEWalletCurrency(e.target.value as CurrencyCode)
-                                  }
+                                  onChange={(e) => {
+                                    const nextC = e.target.value as CurrencyCode;
+                                    setEWalletCurrency(nextC);
+                                    useUiStore.getState().addEnabledCurrency(nextC);
+                                  }}
                                   className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
                                 >
                                   {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
@@ -1740,11 +1729,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                               inputMode="decimal"
                               value={newWalletBalanceText}
                               onChange={(e) =>
-                                setNewWalletBalanceText(
-                                  newWalletCurrency === 'VND'
-                                    ? formatVndDigitsInput(e.target.value)
-                                    : e.target.value,
-                                )
+                                setNewWalletBalanceText(formatVndDigitsInput(e.target.value))
                               }
                               placeholder="0"
                               className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"
@@ -1752,7 +1737,11 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                             <select
                               aria-label={isVi ? 'Tiền tệ ví phụ' : 'Extra wallet currency'}
                               value={newWalletCurrency}
-                              onChange={(e) => setNewWalletCurrency(e.target.value as CurrencyCode)}
+                              onChange={(e) => {
+                                const nextC = e.target.value as CurrencyCode;
+                                setNewWalletCurrency(nextC);
+                                useUiStore.getState().addEnabledCurrency(nextC);
+                              }}
                               className="rounded bg-[var(--bg-subtle)] px-1 py-0.5 text-[10px] font-black text-[var(--ink-primary)] focus:outline-none"
                             >
                               {ONBOARDING_CURRENCY_OPTIONS.map((c) => (
@@ -1773,11 +1762,7 @@ export function WelcomeOnboardingModal(): ReactElement | null {
                                 inputMode="decimal"
                                 value={newWalletCreditLimitText}
                                 onChange={(e) =>
-                                  setNewWalletCreditLimitText(
-                                    newWalletCurrency === 'VND'
-                                      ? formatVndDigitsInput(e.target.value)
-                                      : e.target.value,
-                                  )
+                                  setNewWalletCreditLimitText(formatVndDigitsInput(e.target.value))
                                 }
                                 placeholder="20.000.000"
                                 className="min-w-0 flex-1 bg-transparent text-right text-xs font-black text-[var(--ink-primary)] tabular-nums focus:outline-none"

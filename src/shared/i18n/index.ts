@@ -1,4 +1,5 @@
 import { useUiStore } from '../../app/ui-store';
+import { formatMoney } from '../../domain/money/currency';
 import type { SupportedLocale } from '../../domain/types/entities';
 import { en, type TranslationDictionary } from './en';
 import { vi } from './vi';
@@ -64,11 +65,7 @@ export function getAccountDisplayName(
 }
 
 export function formatVnd(amountMinor: number, hidden = false): string {
-  if (hidden) {
-    return '••••••đ';
-  }
-  const formatted = new Intl.NumberFormat('vi-VN').format(Math.abs(amountMinor));
-  return amountMinor < 0 ? `-${formatted}đ` : `${formatted}đ`;
+  return formatMoney(amountMinor, 'VND', { hidden });
 }
 
 export { en, vi, type TranslationDictionary };

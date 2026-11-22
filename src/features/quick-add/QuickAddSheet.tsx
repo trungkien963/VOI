@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowDownUp,
   Banknote,
+  Check,
   CreditCard,
   Landmark,
   PiggyBank,
@@ -18,6 +19,7 @@ import { useUiStore, type QuickAddFlowKind } from '../../app/ui-store';
 import { DEFAULT_STARTER_ACCOUNTS, DEFAULT_STARTER_POCKETS, localDb } from '../../db/dexie-schema';
 import { debtRepository } from '../../db/repositories/debt-repository';
 import { merchantAliasRepository } from '../../db/repositories/merchant-alias-repository';
+import { pocketRepository } from '../../db/repositories/pocket-repository';
 import { tagRepository } from '../../db/repositories/tag-repository';
 import { transactionRepository } from '../../db/repositories/transaction-repository';
 import {
@@ -25,10 +27,17 @@ import {
   SYSTEM_CATEGORY_IDS,
 } from '../../domain/categories/default-categories';
 import {
+  applyKeypadInput,
+  evaluateMoneyExpression,
+  hasPendingOperator,
+} from '../../domain/money/calculator';
+import {
+  ALL_DATABASE_CURRENCIES,
   computeImpliedFxRate,
+  CURRENCY_METADATA,
   formatMoney,
+  formatNumberInputLive,
   parseFlexibleMoneyInput,
-  toMinorUnits,
   type CurrencyCode,
 } from '../../domain/money/currency';
 import { parseQuickInput } from '../../domain/quick-parser/parser';
@@ -47,51 +56,6 @@ import { CategoryGridPicker } from '../../shared/ui/CategoryGridPicker';
 import { VoiLogo } from '../../shared/ui/VoiLogo';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 
-const EXPENSE_CHIPS_EN = [
-  '☕ Coffee 35k',
-  '🍜 Lunch 55k',
-  '🛵 Grab 40k',
-  '🧋 Boba 45k',
-  '⛽ Gas 70k',
-  '🛒 Grocery 150k',
-];
-const EXPENSE_CHIPS_VI = [
-  '☕ Cafe 35k',
-  '🍜 Ăn trưa 55k',
-  '🛵 Grab 40k',
-  '🧋 Trà sữa 45k',
-  '⛽ Đổ xăng 70k',
-  '🛒 Siêu thị 150k',
-];
-
-const INCOME_CHIPS_EN = [
-  '💰 Salary 15m',
-  '🎁 Bonus 2m',
-  '💻 Freelance 3m',
-  '📈 Interest 500k',
-  '🧧 Gift 1m',
-];
-const INCOME_CHIPS_VI = [
-  '💰 Lương 15tr',
-  '🎁 Thưởng 2tr',
-  '💻 Freelance 3tr',
-  '📈 Lãi tiết kiệm 500k',
-  '🧧 Được tặng 1tr',
-];
-
-const TRANSFER_CHIPS_EN = [
-  '💵 Withdraw ATM 2m',
-  '📱 Top up MoMo 500k',
-  '💳 Pay credit card 5m',
-  '🐷 Save to fund 3m',
-];
-const TRANSFER_CHIPS_VI = [
-  '💵 Rút tiền mặt 2tr',
-  '📱 Nạp MoMo 500k',
-  '💳 Trả thẻ tín dụng 5tr',
-  '🐷 Gửi tiết kiệm 3tr',
-];
-
 export function QuickAddSheet(): ReactElement {
   const {
     isQuickAddOpen,
@@ -101,6 +65,10 @@ export function QuickAddSheet(): ReactElement {
     quickAddPresetText,
     editingTransactionId,
     thousandsInputMode,
+    numberFormat,
+    enabledCurrencies,
+    addEnabledCurrency,
+    toggleEnabledCurrency,
     avatarId,
     closeQuickAdd,
     clearNoSpendDate,
@@ -116,7 +84,6 @@ export function QuickAddSheet(): ReactElement {
     liveAccounts.length > 0
       ? liveAccounts.filter((a) => a.archived_at === null)
       : DEFAULT_STARTER_ACCOUNTS;
-  const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const livePockets = useLiveQuery(
     async () => {
@@ -158,10 +125,18 @@ export function QuickAddSheet(): ReactElement {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     expenseCategories[0]?.id ?? null,
   );
-  const [sourcePocketId, setSourcePocketId] = useState<string>(
-    DEFAULT_STARTER_POCKETS[0]?.id ?? '',
+
+  // Separate Account and Currency selection states!
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(
+    DEFAULT_STARTER_ACCOUNTS[0]?.id ?? 'acc-default-bank',
   );
-  const [destPocketId, setDestPocketId] = useState<string>(DEFAULT_STARTER_POCKETS[1]?.id ?? '');
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>('VND');
+  const [destAccountId, setDestAccountId] = useState<string>(
+    DEFAULT_STARTER_ACCOUNTS[1]?.id ?? 'acc-default-cash',
+  );
+  const [destCurrency, setDestCurrency] = useState<CurrencyCode>('VND');
+  const [isAddCurrencyOpen, setIsAddCurrencyOpen] = useState(false);
+
   const [receivedMajorText, setReceivedMajorText] = useState('');
   const [feeMajorText, setFeeMajorText] = useState('');
   const [showTransferFeeInput, setShowTransferFeeInput] = useState(false);
@@ -170,6 +145,17 @@ export function QuickAddSheet(): ReactElement {
   const [isSplitBill, setIsSplitBill] = useState(false);
   const [splitFriendsText, setSplitFriendsText] = useState('');
   const [splitOwnShareText, setSplitOwnShareText] = useState('');
+
+  // Active currencies shown in the UI: only those enabled by the user (plus any currently in use by pockets)
+  const visibleCurrencies: ReadonlyArray<CurrencyCode> = Array.from(
+    new Set<CurrencyCode>([
+      ...(enabledCurrencies && enabledCurrencies.length > 0
+        ? enabledCurrencies
+        : (['VND'] as CurrencyCode[])),
+      ...pockets.map((p) => (p.currency ?? 'VND').toUpperCase() as CurrencyCode),
+      selectedCurrency,
+    ]),
+  ).filter((code) => Boolean(CURRENCY_METADATA[code]));
 
   // Sync default flow kind, split mode & selected date when opening QuickAdd (create mode)
   useEffect(() => {
@@ -181,11 +167,23 @@ export function QuickAddSheet(): ReactElement {
     if (defaultCats[0]) {
       setSelectedCategoryId(defaultCats[0].id);
     }
+    if (accounts[0]) {
+      setSelectedAccountId(accounts[0].id);
+      const firstCurr = (accounts[0].currency ?? 'VND').toUpperCase() as CurrencyCode;
+      setSelectedCurrency(firstCurr);
+    }
+    if (accounts[1]) {
+      setDestAccountId(accounts[1].id);
+      setDestCurrency((accounts[1].currency ?? 'VND').toUpperCase() as CurrencyCode);
+    }
     if (quickAddPresetText) {
       setQuickInputText(quickAddPresetText);
       const parsed = parseQuickInput(quickAddPresetText, { thousandsInputMode, learnedAliases });
       if (parsed.amountMinor !== null && parsed.amountMinor > 0) {
         setExpression(String(parsed.amountMinor));
+      }
+      if (parsed.currency) {
+        setSelectedCurrency(parsed.currency);
       }
       if (parsed.categoryId) {
         setSelectedCategoryId(parsed.categoryId);
@@ -215,17 +213,22 @@ export function QuickAddSheet(): ReactElement {
       setTxnDateIso(tx.txn_date || todayIso);
       setQuickInputText(tx.note ?? '');
       setExpression(String(tx.amount_minor));
+      setSelectedCurrency((tx.currency || 'VND').toUpperCase() as CurrencyCode);
       if (tx.category_id) setSelectedCategoryId(tx.category_id);
 
       const activeLines = lines.filter((l) => !l.deleted_at);
       if (mappedKind === 'transfer') {
         const outLine = activeLines.find((l) => l.signed_amount_minor < 0 && !l.is_fee);
         const inLine = activeLines.find((l) => l.signed_amount_minor > 0);
-        if (outLine?.pocket_id) setSourcePocketId(outLine.pocket_id);
-        if (inLine?.pocket_id) setDestPocketId(inLine.pocket_id);
+        if (outLine?.account_id) setSelectedAccountId(outLine.account_id);
+        if (outLine?.currency) setSelectedCurrency(outLine.currency.toUpperCase() as CurrencyCode);
+        if (inLine?.account_id) setDestAccountId(inLine.account_id);
+        if (inLine?.currency) setDestCurrency(inLine.currency.toUpperCase() as CurrencyCode);
       } else {
         const firstLine = activeLines[0];
-        if (firstLine?.pocket_id) setSourcePocketId(firstLine.pocket_id);
+        if (firstLine?.account_id) setSelectedAccountId(firstLine.account_id);
+        if (firstLine?.currency)
+          setSelectedCurrency(firstLine.currency.toUpperCase() as CurrencyCode);
       }
     });
   }, [editingTransactionId, todayIso]);
@@ -233,6 +236,7 @@ export function QuickAddSheet(): ReactElement {
   const parsedPreview = quickInputText.trim()
     ? parseQuickInput(quickInputText, {
         thousandsInputMode,
+        defaultCurrency: selectedCurrency,
         learnedAliases,
         categories: allCategories,
         preferredKind: kind,
@@ -246,6 +250,7 @@ export function QuickAddSheet(): ReactElement {
     if (!trimmed) return;
     const parsed = parseQuickInput(val, {
       thousandsInputMode,
+      defaultCurrency: selectedCurrency,
       learnedAliases,
       categories: allCategories,
       preferredKind: kind,
@@ -253,10 +258,10 @@ export function QuickAddSheet(): ReactElement {
     if (parsed.amountMinor !== null && parsed.amountMinor > 0) {
       setExpression(String(parsed.amountMinor));
     }
-    // Unified Earn/Cost Smart Input:
-    // - Typing "+..." or explicit income keywords (e.g. "lương 15tr", "thưởng 2tr") on Cost seamlessly flips to Earn ('income').
-    // - Typing "-..." on Earn seamlessly flips to Cost ('expense').
-    // - Never auto-switch to 'transfer' from Cost/Earn (prevents false-positive transfer switches like "150k cắt tóc").
+    if (parsed.currency && parsed.currency !== selectedCurrency) {
+      addEnabledCurrency(parsed.currency);
+      setSelectedCurrency(parsed.currency);
+    }
     if (kind === 'expense' && parsed.type === 'income') {
       setKind('income');
       setIsSplitBill(false);
@@ -309,21 +314,71 @@ export function QuickAddSheet(): ReactElement {
 
   const visibleCategories =
     kind === ('income' as CategoryKind) ? incomeCategories : expenseCategories;
+
+  const sourceAccount =
+    accounts.find((a) => a.id === selectedAccountId) ?? accounts[0] ?? DEFAULT_STARTER_ACCOUNTS[0]!;
+  const destAccount =
+    accounts.find((a) => a.id === destAccountId && a.id !== sourceAccount.id) ??
+    accounts.find((a) => a.id !== sourceAccount.id) ??
+    sourceAccount;
+
   const sourcePocket =
-    pockets.find((p) => p.id === sourcePocketId) ??
-    pockets.find((p) => p.is_default && (p.currency ?? 'VND') === 'VND') ??
+    pockets.find(
+      (p) =>
+        p.account_id === sourceAccount.id &&
+        (p.currency ?? 'VND').toUpperCase() === selectedCurrency,
+    ) ??
+    pockets.find((p) => p.account_id === sourceAccount.id) ??
     pockets[0];
+
   const destPocket =
-    pockets.find((p) => p.id === destPocketId && p.id !== sourcePocket?.id) ??
+    pockets.find(
+      (p) =>
+        p.account_id === destAccount.id &&
+        (p.currency ?? 'VND').toUpperCase() === destCurrency &&
+        (p.account_id !== sourceAccount.id ||
+          (p.currency ?? 'VND').toUpperCase() !== selectedCurrency),
+    ) ??
+    pockets.find((p) => p.account_id === destAccount.id && p.id !== sourcePocket?.id) ??
     pockets.find((p) => p.id !== sourcePocket?.id) ??
     pockets[0];
 
-  const srcCurrency: CurrencyCode = (sourcePocket?.currency as CurrencyCode | undefined) ?? 'VND';
-  const dstCurrency: CurrencyCode = (destPocket?.currency as CurrencyCode | undefined) ?? 'VND';
+  const srcCurrency: CurrencyCode = selectedCurrency;
+  const dstCurrency: CurrencyCode = kind === 'transfer' ? destCurrency : selectedCurrency;
   const isCrossCurrency = kind === 'transfer' && srcCurrency !== dstCurrency;
 
+  const evaluatedKeypadMinor = evaluateMoneyExpression(expression);
   const currentEvaluatedMinor =
-    Number(expression) > 0 ? Number(expression) : (parsedPreview?.amountMinor ?? 0);
+    evaluatedKeypadMinor > 0 ? evaluatedKeypadMinor : (parsedPreview?.amountMinor ?? 0);
+  const showEqualsFirst = hasPendingOperator(expression);
+
+  // Strict Save Requirement:
+  // For Expense/Income, allow saving ONLY when Note + Category + Amount (> 0) are ALL filled
+  // (or if the user entered a positive amount via calculator keypad while a category is selected —
+  // wait: let's check both user note requirement AND existing unit tests!).
+  // Wait: in `tests/unit/m0-schema-and-shell.test.tsx`, the test only checks `calculator-evaluated-amount` and closes the modal.
+  // What about other tests? No other test clicks submit on QuickAddSheet without a note!
+  // So requiring `hasNote && hasCategory && hasAmount` for expense/income matches the user's exact specification:
+  // "chỉ khi đã điền note + category + số tiền thì mới cho lưu giao dịch"!
+  const hasNote = quickInputText.trim().length > 0;
+  const hasCategory = kind === 'transfer' ? true : Boolean(selectedCategoryId);
+  const hasAmount = currentEvaluatedMinor > 0;
+  const canSaveTransaction =
+    kind === 'transfer'
+      ? hasAmount && Boolean(sourceAccount && destAccount)
+      : hasNote && hasCategory && hasAmount;
+
+  const missingFieldsHints: string[] = [];
+  if (kind !== 'transfer' && !hasNote) {
+    missingFieldsHints.push(isVi ? 'Ghi chú' : 'Note');
+  }
+  if (kind !== 'transfer' && !hasCategory) {
+    missingFieldsHints.push(isVi ? 'Danh mục' : 'Category');
+  }
+  if (!hasAmount) {
+    missingFieldsHints.push(isVi ? 'Số tiền' : 'Amount');
+  }
+
   const autoSplitTotalPeople = splitFriendNames.length + 1;
   const defaultOwnShareMinor =
     currentEvaluatedMinor > 0 && splitFriendNames.length > 0
@@ -342,6 +397,7 @@ export function QuickAddSheet(): ReactElement {
     setReceivedMajorText('');
     setFeeMajorText('');
     setShowTransferFeeInput(false);
+    setIsAddCurrencyOpen(false);
     setIsSplitBill(false);
     setSplitFriendsText('');
     setSplitOwnShareText('');
@@ -360,14 +416,45 @@ export function QuickAddSheet(): ReactElement {
     }
   };
 
+  const resolveOrCreatePocketForAccountAndCurrency = async (
+    account: Account,
+    currencyCode: CurrencyCode,
+  ): Promise<Pocket> => {
+    const existing = pockets.find(
+      (p) =>
+        p.account_id === account.id &&
+        (p.currency ?? 'VND').toUpperCase() === currencyCode.toUpperCase(),
+    );
+    if (existing) return existing;
+    return await pocketRepository.createPocketWithOpeningBalance({
+      accountId: account.id,
+      name: `${account.name} (${currencyCode})`,
+      currency: currencyCode,
+      openingBalanceMinor: 0,
+      colorHex: account.color_hex,
+      iconName: account.icon_name,
+    });
+  };
+
   const handleSaveTransaction = async (evaluatedMinor: number): Promise<void> => {
-    const finalMinor = evaluatedMinor > 0 ? evaluatedMinor : (parsedPreview?.amountMinor ?? 0);
-    if (finalMinor <= 0 || !sourcePocket) {
-      handleClose();
+    const finalMinor = evaluatedMinor > 0 ? evaluatedMinor : currentEvaluatedMinor;
+    if (finalMinor <= 0) return;
+    if (kind !== 'transfer' && (!quickInputText.trim() || !selectedCategoryId)) {
       return;
     }
 
-    const cleanNote = parsedPreview?.note ?? (quickInputText.trim() || null);
+    const resolvedSourcePocket = await resolveOrCreatePocketForAccountAndCurrency(
+      sourceAccount,
+      srcCurrency,
+    );
+    const resolvedDestPocket =
+      kind === 'transfer'
+        ? await resolveOrCreatePocketForAccountAndCurrency(destAccount, dstCurrency)
+        : null;
+
+    const cleanNote = parsedPreview?.note?.trim()
+      ? parsedPreview.note.trim()
+      : quickInputText.trim() || null;
     const currentTodayIso = new Date().toISOString().slice(0, 10);
     const chosenDateIso = txnDateIso || currentTodayIso;
     const occurredAt =
@@ -402,8 +489,8 @@ export function QuickAddSheet(): ReactElement {
         groupId: `grp-split-${nowMs}`,
         expenseTransactionId: `tx-split-own-${nowMs}`,
         userId: 'local-user',
-        sourceAccountId: sourcePocket.account_id,
-        sourcePocketId: sourcePocket.id,
+        sourceAccountId: resolvedSourcePocket.account_id,
+        sourcePocketId: resolvedSourcePocket.id,
         currency: srcCurrency,
         totalPaidMinor: finalMinor,
         ownExpenseMinor: ownMinor,
@@ -448,10 +535,10 @@ export function QuickAddSheet(): ReactElement {
       type: kind,
       amountMinor: finalMinor,
       currency: srcCurrency,
-      sourceAccountId: sourcePocket.account_id,
-      sourcePocketId: sourcePocket.id,
-      destinationAccountId: kind === 'transfer' ? destPocket?.account_id : undefined,
-      destinationPocketId: kind === 'transfer' ? (destPocket?.id ?? null) : null,
+      sourceAccountId: resolvedSourcePocket.account_id,
+      sourcePocketId: resolvedSourcePocket.id,
+      destinationAccountId: kind === 'transfer' ? resolvedDestPocket?.account_id : undefined,
+      destinationPocketId: kind === 'transfer' ? (resolvedDestPocket?.id ?? null) : null,
       destinationAmountMinor: kind === 'transfer' ? dstAmountMinor : undefined,
       destinationCurrency: kind === 'transfer' ? dstCurrency : undefined,
       transferFeeMinor: feeMinor,
@@ -483,7 +570,7 @@ export function QuickAddSheet(): ReactElement {
       await merchantAliasRepository.learnAliasAtomic({
         rawKeyword: cleanNote,
         categoryId: selectedCategoryId,
-        accountId: sourcePocket.account_id,
+        accountId: resolvedSourcePocket.account_id,
       });
     }
 
@@ -491,7 +578,7 @@ export function QuickAddSheet(): ReactElement {
     const chosenCat = allCategories.find((c) => c.id === selectedCategoryId);
     const labelText =
       cleanNote || (chosenCat ? getCategoryDisplayName(chosenCat, t) : t.flows.cost);
-    const pocketDisplayName = getAccountDisplayName(sourcePocket, locale);
+    const accountDisplayName = `${getAccountDisplayName(sourceAccount, locale)} · ${srcCurrency}`;
 
     const savedFlowMascot =
       kind === 'income' ? 'income' : kind === 'transfer' ? 'transfer' : 'expense';
@@ -504,8 +591,8 @@ export function QuickAddSheet(): ReactElement {
         amountText: `${kind === 'income' ? '+' : '-'}${formattedAmt} · ${labelText}`,
         title: isVi ? 'Chúc mừng giao dịch đầu tiên! 🎉' : 'Congrats on your first log! 🎉',
         subtitle: isVi
-          ? `Đã ghi nhận vào ${pocketDisplayName}. Bạn vừa mở khóa Chuỗi kỷ luật 🔥 Ngày 1!`
-          : `Saved to ${pocketDisplayName}. You just unlocked your 🔥 Day 1 Streak!`,
+          ? `Đã ghi nhận vào ${accountDisplayName}. Bạn vừa mở khóa Chuỗi kỷ luật 🔥 Ngày 1!`
+          : `Saved to ${accountDisplayName}. You just unlocked your 🔥 Day 1 Streak!`,
       });
     } else {
       triggerCelebration({
@@ -515,7 +602,7 @@ export function QuickAddSheet(): ReactElement {
         title: isVi
           ? `Đã lưu ${kind === 'income' ? '+' : kind === 'expense' ? '-' : ''}${formattedAmt} (${labelText})`
           : `Saved ${kind === 'income' ? '+' : kind === 'expense' ? '-' : ''}${formattedAmt} (${labelText})`,
-        subtitle: isVi ? `Tài khoản: ${pocketDisplayName}` : `Wallet: ${pocketDisplayName}`,
+        subtitle: isVi ? `Tài khoản: ${accountDisplayName}` : `Wallet: ${accountDisplayName}`,
       });
     }
 
@@ -531,9 +618,8 @@ export function QuickAddSheet(): ReactElement {
       if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
         return;
       }
-      const amountToSave = Number(expression) || parsedPreview?.amountMinor || 0;
-      if (amountToSave > 0) {
-        void handleSaveTransaction(amountToSave);
+      if (canSaveTransaction && currentEvaluatedMinor > 0) {
+        void handleSaveTransaction(currentEvaluatedMinor);
       }
     }
   };
@@ -558,42 +644,17 @@ export function QuickAddSheet(): ReactElement {
     }
   };
 
-  const getPocketVisualLabel = (
-    p: Pocket,
-  ): { walletName: string; currency: string; accType?: AccountType } => {
-    const parentAcc = accountById.get(p.account_id);
-    const rawName = parentAcc
-      ? getAccountDisplayName(parentAcc, locale)
-      : getAccountDisplayName(p, locale).replace(/\s*\([A-Z]{3}\)\s*$/, '');
-    return {
-      walletName: rawName,
-      currency: (p.currency ?? parentAcc?.currency ?? 'VND').toUpperCase(),
-      accType: parentAcc?.type,
-    };
-  };
-
   const previewImpliedFx =
-    isCrossCurrency && Number(expression) > 0 && Number(receivedMajorText) > 0
+    isCrossCurrency &&
+    currentEvaluatedMinor > 0 &&
+    parseFlexibleMoneyInput(receivedMajorText, dstCurrency) > 0
       ? computeImpliedFxRate(
-          toMinorUnits(Number(expression), srcCurrency),
+          currentEvaluatedMinor,
           srcCurrency,
-          toMinorUnits(Number(receivedMajorText), dstCurrency),
+          parseFlexibleMoneyInput(receivedMajorText, dstCurrency),
           dstCurrency,
         )
       : null;
-
-  const smartChips =
-    kind === 'income'
-      ? isVi
-        ? INCOME_CHIPS_VI
-        : INCOME_CHIPS_EN
-      : kind === 'transfer'
-        ? isVi
-          ? TRANSFER_CHIPS_VI
-          : TRANSFER_CHIPS_EN
-        : isVi
-          ? EXPENSE_CHIPS_VI
-          : EXPENSE_CHIPS_EN;
 
   const smartInputPlaceholder =
     kind === 'income'
@@ -602,8 +663,8 @@ export function QuickAddSheet(): ReactElement {
         : 'e.g. Monthly salary 15m, Project bonus 2m, Freelance...'
       : kind === 'transfer'
         ? isVi
-          ? 'VD: Rút tiền mặt 2tr, Nạp ví MoMo 500k, Trả thẻ...'
-          : 'e.g. Withdraw ATM 2m, Top up MoMo 500k...'
+          ? 'Ghi chú chuyển khoản (VD: Rút tiền mặt 2tr, Nạp ví...)'
+          : 'Transfer note (e.g. Withdraw ATM 2m, Top up wallet...)'
         : t.quickAddModal.placeholder;
 
   const activeFlowMascot =
@@ -615,6 +676,22 @@ export function QuickAddSheet(): ReactElement {
           ? 'lend-borrow'
           : 'expense';
 
+  const submitButtonLabel =
+    !editingTransactionId && kind === 'expense' && isSplitBill && splitFriendNames.length > 0
+      ? isVi
+        ? `Lưu & Chia bill (${splitFriendNames.length + 1} người)`
+        : `Save & Split (${splitFriendNames.length + 1} ways)`
+      : t.quickAddModal.submitBtn;
+
+  const handleFooterPrimarySubmit = (): void => {
+    if (showEqualsFirst) {
+      setExpression(applyKeypadInput(expression, '='));
+      return;
+    }
+    if (!canSaveTransaction) return;
+    void handleSaveTransaction(currentEvaluatedMinor);
+  };
+
   return (
     <BottomSheet
       open={isQuickAddOpen}
@@ -623,8 +700,35 @@ export function QuickAddSheet(): ReactElement {
       titleId="quick-add-modal-title"
       closeLabel={t.quickAddModal.closeBtn}
       headerAccessory={<VoiLogo variant="cobalt" size={30} className="rounded-xl" />}
+      footer={
+        <div className="space-y-1">
+          {!showEqualsFirst && !canSaveTransaction && missingFieldsHints.length > 0 && (
+            <p
+              data-testid="quick-add-missing-fields-hint"
+              className="text-center text-[11px] font-bold text-[var(--ink-secondary)]"
+            >
+              {isVi
+                ? `Điền đủ để lưu: ${missingFieldsHints.join(' + ')}`
+                : `Required to save: ${missingFieldsHints.join(' + ')}`}
+            </p>
+          )}
+          <button
+            type="button"
+            data-testid="quick-add-sticky-submit-btn"
+            disabled={!showEqualsFirst && !canSaveTransaction}
+            onClick={handleFooterPrimarySubmit}
+            className={`flex w-full items-center justify-center rounded-2xl py-3.5 text-base font-black shadow-sm transition ${
+              showEqualsFirst || canSaveTransaction
+                ? 'bg-[#191919] text-[#FAFAFA] hover:opacity-95 active:scale-[0.99]'
+                : 'cursor-not-allowed bg-[var(--bg-subtle)] text-[var(--ink-muted)] opacity-75'
+            }`}
+          >
+            {showEqualsFirst ? t.calculator.computeEqualsBtn : submitButtonLabel}
+          </button>
+        </div>
+      }
     >
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <SegmentedControl<QuickAddFlowKind>
           ariaLabel={t.quickAddModal.typeAria}
           size="sm"
@@ -638,14 +742,20 @@ export function QuickAddSheet(): ReactElement {
           ]}
         />
 
-        {/* Hidden accessible <select> elements kept in sync for screen readers & tests */}
+        {/* Hidden accessible <select> elements kept in sync for screen readers */}
         <label htmlFor="quick-add-source-pocket" className="sr-only">
           {t.quickAddModal.sourcePocketLabel}
         </label>
         <select
           id="quick-add-source-pocket"
           value={sourcePocket?.id ?? ''}
-          onChange={(e) => setSourcePocketId(e.target.value)}
+          onChange={(e) => {
+            const p = pockets.find((item) => item.id === e.target.value);
+            if (p) {
+              setSelectedAccountId(p.account_id);
+              setSelectedCurrency((p.currency ?? 'VND').toUpperCase() as CurrencyCode);
+            }
+          }}
           className="sr-only"
         >
           {pockets.map((p) => (
@@ -663,7 +773,13 @@ export function QuickAddSheet(): ReactElement {
             <select
               id="quick-add-dest-pocket"
               value={destPocket?.id ?? ''}
-              onChange={(e) => setDestPocketId(e.target.value)}
+              onChange={(e) => {
+                const p = pockets.find((item) => item.id === e.target.value);
+                if (p) {
+                  setDestAccountId(p.account_id);
+                  setDestCurrency((p.currency ?? 'VND').toUpperCase() as CurrencyCode);
+                }
+              }}
               className="sr-only"
             >
               {pockets
@@ -677,93 +793,264 @@ export function QuickAddSheet(): ReactElement {
           </>
         )}
 
-        {/* WALLET & CURRENCY SELECTION: Single horizontal bar for Cost/Earn, or Visual Route Card (From -> To) for Transfer */}
-        {kind !== 'transfer' ? (
-          <div
-            data-testid="quick-add-visual-pocket-bar"
-            className="flex items-center gap-1.5 overflow-x-auto py-0.5"
-          >
-            {pockets.map((p) => {
-              const isSelected = p.id === sourcePocket?.id;
-              const meta = getPocketVisualLabel(p);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  data-testid={`quick-add-pocket-pill-${p.id}`}
-                  onClick={() => setSourcePocketId(p.id)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
-                    isSelected
-                      ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
-                      : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
-                  }`}
-                >
-                  {renderAccountTypeGlyph(meta.accType)}
-                  <span className="max-w-[130px] truncate">{meta.walletName}</span>
+        {/* 1. BOX INPUT (MAX 250 CHARS, NO SUGGESTION CHIPS, COUNTER BELOW TEXT SO ZERO OVERLAY!) */}
+        <div className="space-y-1.5">
+          <div className="overflow-hidden rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] transition-colors focus-within:border-[#191919] focus-within:bg-[var(--bg-card)]">
+            <textarea
+              id="quick-add-smart-note-input"
+              data-testid="quick-add-smart-note-input"
+              rows={quickInputText.length > 48 || quickInputText.includes('\n') ? 3 : 2}
+              maxLength={250}
+              value={quickInputText}
+              onChange={(e) => handleQuickInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={smartInputPlaceholder}
+              className="block w-full resize-none bg-transparent px-3.5 pt-2.5 pb-1 text-sm leading-snug font-extrabold text-[var(--ink-primary)] placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:outline-none"
+            />
+            {/* Dedicated bottom bar inside the input box so the 0/250 counter NEVER overlaps typed text */}
+            <div className="flex items-center justify-between px-3 pb-1.5 text-[10px]">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {parsedPreview && parsedPreview.amountMinor !== null && (
                   <span
-                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
+                    data-testid="quick-input-live-preview"
+                    className="inline-flex items-center gap-1 font-extrabold text-[var(--ink-primary)] tabular-nums"
+                  >
+                    <Sparkles
+                      className="h-3 w-3 shrink-0"
+                      style={{ color: activeBuddy.characterFillHex }}
+                    />
+                    <span>= {formatMoney(parsedPreview.amountMinor, parsedPreview.currency)}</span>
+                  </span>
+                )}
+                {parsedPreview?.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-[#191919] px-1.5 py-0.5 text-[9px] font-bold text-[#FAFAFA]"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span
+                  data-testid="quick-input-char-limit"
+                  className="font-bold text-[var(--ink-muted)] tabular-nums"
+                >
+                  {quickInputText.length}/250
+                </span>
+                {quickInputText.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickInputText('')}
+                    aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. CATEGORY SELECTION PANEL (Right below Box Input!) */}
+        {kind !== 'transfer' && (
+          <CategoryGridPicker
+            categories={visibleCategories}
+            selectedCategoryId={selectedCategoryId}
+            onSelectCategory={setSelectedCategoryId}
+          />
+        )}
+
+        {/* 3. ACCOUNT SCROLL ROW & 4. SEPARATE CURRENCY SCROLL ROW */}
+        {kind !== 'transfer' ? (
+          <div className="space-y-1.5">
+            {/* Row 3: Separate Account Horizontal Scroll */}
+            <div
+              data-testid="quick-add-account-scroll"
+              className="flex items-center gap-1.5 overflow-x-auto py-0.5"
+            >
+              {accounts.map((acc) => {
+                const isSelected = acc.id === sourceAccount.id;
+                const walletName = getAccountDisplayName(acc, locale);
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    data-testid={`quick-add-account-pill-${acc.id}`}
+                    onClick={() => setSelectedAccountId(acc.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
                       isSelected
-                        ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
-                        : 'bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                        ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
                     }`}
                   >
-                    {meta.currency}
+                    {renderAccountTypeGlyph(acc.type)}
+                    <span className="max-w-[140px] truncate">{walletName}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Row 4: Separate Currency Horizontal Scroll (Only User's Enabled Currencies + Quick Add Currency Button) */}
+            <div
+              data-testid="quick-add-currency-scroll"
+              className="flex items-center gap-1.5 overflow-x-auto py-0.5"
+            >
+              {visibleCurrencies.map((code) => {
+                const isSelected = code === selectedCurrency;
+                const meta = CURRENCY_METADATA[code];
+                return (
+                  <button
+                    key={code}
+                    type="button"
+                    data-testid={`quick-add-currency-pill-${code}`}
+                    onClick={() => setSelectedCurrency(code)}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-extrabold tabular-nums transition ${
+                      isSelected
+                        ? 'border-2 border-[#191919] bg-[#191919] text-[#FAFAFA] shadow-2xs'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
+                    }`}
+                  >
+                    <span>{code}</span>
+                    {meta && (
+                      <span
+                        className={`text-[10px] ${
+                          isSelected ? 'text-[#FAFAFA]/80' : 'text-[var(--ink-muted)]'
+                        }`}
+                      >
+                        ({meta.symbol})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                data-testid="quick-add-more-currencies-btn"
+                onClick={() => setIsAddCurrencyOpen((v) => !v)}
+                className={`inline-flex shrink-0 items-center gap-1 rounded-xl border px-2.5 py-1 text-[11px] font-bold transition ${
+                  isAddCurrencyOpen
+                    ? 'border-[#191919] bg-[#191919] text-[#FAFAFA]'
+                    : 'border-dashed border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
+                }`}
+              >
+                <Plus className="h-3 w-3" />
+                <span>{isVi ? 'Ngoại tệ' : 'Currency'}</span>
+              </button>
+            </div>
+
+            {/* Inline Drawer to Enable/Disable Currencies from the 20-Currency Database Catalog */}
+            {isAddCurrencyOpen && (
+              <div
+                data-testid="quick-add-currency-catalog-drawer"
+                className="space-y-1.5 rounded-2xl border border-[#191919] bg-[var(--bg-subtle)] p-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-[var(--ink-primary)]">
+                    {isVi
+                      ? 'Chọn ngoại tệ muốn hiển thị (20 loại tiền trong DB)'
+                      : 'Select active currencies to display'}
                   </span>
-                </button>
-              );
-            })}
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCurrencyOpen(false)}
+                    className="rounded-full p-0.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto py-0.5">
+                  {ALL_DATABASE_CURRENCIES.map((code) => {
+                    const meta = CURRENCY_METADATA[code];
+                    const isEnabled = (enabledCurrencies ?? ['VND']).includes(code);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        data-testid={`catalog-currency-toggle-${code}`}
+                        onClick={() => {
+                          toggleEnabledCurrency(code);
+                          if (!isEnabled) {
+                            setSelectedCurrency(code);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                          isEnabled
+                            ? 'border-[#191919] bg-[#191919] text-[#FAFAFA]'
+                            : 'border-[var(--border-hairline)] bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:border-[#191919]'
+                        }`}
+                      >
+                        {isEnabled && <Check className="h-3 w-3" />}
+                        <span>
+                          {code} ({meta.symbol})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
+          /* Transfer Route Card with Separate Account & Currency Rows */
           <div className="space-y-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)]/75 p-2.5">
-            {/* Step 1: Source Wallet */}
+            {/* Step 1: Source Wallet + Source Currency */}
             <div className="space-y-1">
               <div className="flex items-center justify-between px-0.5">
                 <span className="text-[10px] font-black tracking-wide text-[var(--ink-secondary)] uppercase">
                   {isVi ? '1. Từ ví nguồn (Chuyển đi)' : '1. From Wallet (Source)'}
                 </span>
-                {sourcePocket && (
-                  <span className="text-[10px] font-extrabold text-[var(--ink-primary)]">
-                    {getPocketVisualLabel(sourcePocket).walletName} ({srcCurrency})
-                  </span>
-                )}
+                <span className="text-[10px] font-extrabold text-[var(--ink-primary)]">
+                  {getAccountDisplayName(sourceAccount, locale)} · {srcCurrency}
+                </span>
               </div>
-              <div
-                data-testid="quick-add-visual-pocket-bar"
-                className="flex items-center gap-1.5 overflow-x-auto py-0.5"
-              >
-                {pockets.map((p) => {
-                  const isSelected = p.id === sourcePocket?.id;
-                  const meta = getPocketVisualLabel(p);
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                {accounts.map((acc) => {
+                  const isSelected = acc.id === sourceAccount.id;
                   return (
                     <button
-                      key={p.id}
+                      key={acc.id}
                       type="button"
-                      data-testid={`quick-add-pocket-pill-${p.id}`}
-                      onClick={() => setSourcePocketId(p.id)}
+                      onClick={() => setSelectedAccountId(acc.id)}
                       className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
                         isSelected
                           ? 'border-2 border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA] shadow-2xs'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-card)] font-bold text-[var(--ink-primary)] hover:border-[#191919]'
                       }`}
                     >
-                      {renderAccountTypeGlyph(meta.accType)}
-                      <span className="max-w-[125px] truncate">{meta.walletName}</span>
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
-                          isSelected
-                            ? 'bg-[#FAFAFA]/20 text-[#FAFAFA]'
-                            : 'bg-[var(--bg-subtle)] text-[var(--ink-secondary)]'
-                        }`}
-                      >
-                        {meta.currency}
+                      {renderAccountTypeGlyph(acc.type)}
+                      <span className="max-w-[125px] truncate">
+                        {getAccountDisplayName(acc, locale)}
                       </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                {visibleCurrencies.map((code) => {
+                  const isSelected = code === selectedCurrency;
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setSelectedCurrency(code)}
+                      className={`shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-extrabold transition ${
+                        isSelected
+                          ? 'border-[#191919] bg-[#191919] text-[#FAFAFA]'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                      }`}
+                    >
+                      {code}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Middle Route Connector: Arrow + Swap 1-Tap + Optional Fee Toggle */}
+            {/* Middle Route Connector */}
             <div className="flex items-center justify-between border-y border-[var(--border-hairline)] py-1.5">
               <div className="inline-flex items-center gap-1 text-[10px] font-black text-[#2563EB]">
                 <ArrowDown className="h-3.5 w-3.5 stroke-[2.6]" />
@@ -771,21 +1058,21 @@ export function QuickAddSheet(): ReactElement {
               </div>
 
               <div className="flex items-center gap-1.5">
-                {pockets.length >= 2 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (sourcePocket && destPocket) {
-                        setSourcePocketId(destPocket.id);
-                        setDestPocketId(sourcePocket.id);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--ink-primary)] transition hover:border-[#191919]"
-                  >
-                    <ArrowDownUp className="h-2.5 w-2.5" />
-                    <span>{isVi ? 'Đảo chiều' : 'Swap'}</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prevAcc = sourceAccount.id;
+                    const prevCurr = selectedCurrency;
+                    setSelectedAccountId(destAccount.id);
+                    setSelectedCurrency(destCurrency);
+                    setDestAccountId(prevAcc);
+                    setDestCurrency(prevCurr);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--ink-primary)] transition hover:border-[#191919]"
+                >
+                  <ArrowDownUp className="h-2.5 w-2.5" />
+                  <span>{isVi ? 'Đảo chiều' : 'Swap'}</span>
+                </button>
 
                 <button
                   type="button"
@@ -802,42 +1089,52 @@ export function QuickAddSheet(): ReactElement {
               </div>
             </div>
 
-            {/* Step 2: Destination Wallet */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-              {pockets
-                .filter((p) => p.id !== sourcePocket?.id)
-                .map((p) => {
-                  const isSelected = p.id === destPocket?.id;
-                  const meta = getPocketVisualLabel(p);
+            {/* Step 2: Destination Wallet + Destination Currency */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                {accounts.map((acc) => {
+                  const isSelected = acc.id === destAccount.id;
                   return (
                     <button
-                      key={p.id}
+                      key={acc.id}
                       type="button"
-                      data-testid={`quick-add-dest-pocket-pill-${p.id}`}
-                      onClick={() => setDestPocketId(p.id)}
+                      onClick={() => setDestAccountId(acc.id)}
                       className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
                         isSelected
                           ? 'border-2 border-[#2563EB] bg-[#2563EB] font-extrabold text-white shadow-2xs'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-card)] font-bold text-[var(--ink-primary)] hover:border-[#2563EB]'
                       }`}
                     >
-                      {renderAccountTypeGlyph(meta.accType)}
-                      <span className="max-w-[125px] truncate">{meta.walletName}</span>
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-black ${
-                          isSelected
-                            ? 'bg-white/20 text-white'
-                            : 'bg-[var(--bg-subtle)] text-[var(--ink-secondary)]'
-                        }`}
-                      >
-                        {meta.currency}
+                      {renderAccountTypeGlyph(acc.type)}
+                      <span className="max-w-[125px] truncate">
+                        {getAccountDisplayName(acc, locale)}
                       </span>
                     </button>
                   );
                 })}
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                {visibleCurrencies.map((code) => {
+                  const isSelected = code === destCurrency;
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setDestCurrency(code)}
+                      className={`shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-extrabold transition ${
+                        isSelected
+                          ? 'border-[#2563EB] bg-[#2563EB] text-white'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-card)] text-[var(--ink-secondary)]'
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Collapsible Cross-Currency & Optional Fee Row (Hidden by default when 0đ fee & same currency!) */}
+            {/* Collapsible Cross-Currency & Optional Fee Row (Formatted with Thousand Separators Live!) */}
             {(isCrossCurrency || showTransferFeeInput || feeMajorText.trim().length > 0) && (
               <div className="grid grid-cols-1 gap-2 border-t border-[var(--border-hairline)] pt-2 sm:grid-cols-2">
                 {isCrossCurrency && (
@@ -853,7 +1150,9 @@ export function QuickAddSheet(): ReactElement {
                       type="text"
                       inputMode="decimal"
                       value={receivedMajorText}
-                      onChange={(e) => setReceivedMajorText(e.target.value)}
+                      onChange={(e) =>
+                        setReceivedMajorText(formatNumberInputLive(e.target.value, numberFormat))
+                      }
                       placeholder="0"
                       className="mt-0.5 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--ink-primary)] tabular-nums"
                     />
@@ -879,7 +1178,9 @@ export function QuickAddSheet(): ReactElement {
                       type="text"
                       inputMode="decimal"
                       value={feeMajorText}
-                      onChange={(e) => setFeeMajorText(e.target.value)}
+                      onChange={(e) =>
+                        setFeeMajorText(formatNumberInputLive(e.target.value, numberFormat))
+                      }
                       placeholder="0"
                       className="mt-0.5 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink-primary)] tabular-nums"
                     />
@@ -915,10 +1216,12 @@ export function QuickAddSheet(): ReactElement {
                   type="text"
                   inputMode="decimal"
                   value={splitOwnShareText}
-                  onChange={(e) => setSplitOwnShareText(e.target.value)}
+                  onChange={(e) =>
+                    setSplitOwnShareText(formatNumberInputLive(e.target.value, numberFormat))
+                  }
                   placeholder={
                     defaultOwnShareMinor > 0
-                      ? String(defaultOwnShareMinor)
+                      ? formatNumberInputLive(String(defaultOwnShareMinor), numberFormat)
                       : isVi
                         ? 'Tự chia đều'
                         : 'Auto'
@@ -977,115 +1280,16 @@ export function QuickAddSheet(): ReactElement {
           </div>
         )}
 
-        {/* Clean, Uncluttered Smart Content / Note Input Box (No redundant Mục/Date/Chia bill header!) */}
-        <div className="space-y-1.5">
-          <div className="relative">
-            <textarea
-              id="quick-add-smart-note-input"
-              data-testid="quick-add-smart-note-input"
-              rows={quickInputText.length > 42 || quickInputText.includes('\n') ? 3 : 1}
-              maxLength={250}
-              value={quickInputText}
-              onChange={(e) => handleQuickInputChange(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder={smartInputPlaceholder}
-              className="w-full resize-none rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 pr-14 text-sm leading-snug font-extrabold text-[var(--ink-primary)] transition-all placeholder:text-xs placeholder:font-semibold placeholder:text-[var(--ink-muted)] focus:border-[#191919] focus:bg-[var(--bg-card)] focus:outline-none"
-            />
-            <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
-              {quickInputText.length > 0 && (
-                <span className="text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
-                  {quickInputText.length}/250
-                </span>
-              )}
-              {quickInputText.trim().length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setQuickInputText('')}
-                  aria-label={isVi ? 'Xoá nội dung' : 'Clear note'}
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-card)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!quickInputText.trim() ? (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 whitespace-nowrap">
-              {smartChips.map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => handleQuickInputChange(chip.replace(/^[^\p{L}\p{N}]+\s*/u, ''))}
-                  className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--ink-primary)] transition hover:border-[#191919] active:scale-95"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-          ) : (
-            parsedPreview &&
-            (parsedPreview.amountMinor !== null || parsedPreview.tags.length > 0) && (
-              <div
-                data-testid="quick-input-live-preview"
-                style={{ backgroundColor: `${activeBuddy.cardBgHex}50` }}
-                className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#191919]/10 px-2.5 py-1 text-[11px] font-bold text-[#191919]"
-              >
-                <Sparkles
-                  className="h-3.5 w-3.5 shrink-0"
-                  style={{ color: activeBuddy.characterFillHex }}
-                />
-                <span>{t.quickAddModal.parsedPreviewLabel}:</span>
-                {parsedPreview.amountMinor !== null && (
-                  <strong
-                    className="font-black tabular-nums"
-                    style={{ color: activeBuddy.characterFillHex }}
-                  >
-                    = {formatMoney(parsedPreview.amountMinor, parsedPreview.currency)}
-                  </strong>
-                )}
-                {kind === 'transfer' && sourcePocket && destPocket && (
-                  <span className="rounded-full bg-[#FAFAFA] px-2 py-0.5 text-[10px] font-extrabold text-[#191919]">
-                    {getPocketVisualLabel(sourcePocket).walletName} →{' '}
-                    {getPocketVisualLabel(destPocket).walletName}
-                  </span>
-                )}
-                {parsedPreview.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-[#191919] px-2 py-0.5 text-[10px] font-bold text-[#FAFAFA]"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )
-          )}
-        </div>
-
-        {kind !== 'transfer' && (
-          <CategoryGridPicker
-            categories={visibleCategories}
-            selectedCategoryId={selectedCategoryId}
-            onSelectCategory={setSelectedCategoryId}
-          />
-        )}
-
+        {/* 5. Ô BÉ CÁNH TÍM ĐANG HIỆN CHI TIÊU (Click to expand Calculator Keypad; Save button frozen in footer below!) */}
         <CalculatorKeypad
           expression={expression}
           onChangeExpression={setExpression}
           onSubmit={(amountMinor) => void handleSaveTransaction(amountMinor)}
           flowMascot={activeFlowMascot}
-          submitLabel={
-            !editingTransactionId &&
-            kind === 'expense' &&
-            isSplitBill &&
-            splitFriendNames.length > 0
-              ? isVi
-                ? `Lưu & Chia bill (${splitFriendNames.length + 1} người)`
-                : `Save & Split (${splitFriendNames.length + 1} ways)`
-              : t.quickAddModal.submitBtn
-          }
+          currency={srcCurrency}
+          defaultKeypadOpen={false}
+          hideSubmitButton={true}
+          submitLabel={submitButtonLabel}
         />
       </div>
     </BottomSheet>

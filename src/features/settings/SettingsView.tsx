@@ -30,6 +30,11 @@ import {
   evaluateThemeUnlocks,
   type ThemeUnlockRequirement,
 } from '../../domain/engagement/streak-and-themes';
+import {
+  ALL_DATABASE_CURRENCIES,
+  CURRENCY_METADATA,
+  type NumberFormatStyle,
+} from '../../domain/money/currency';
 import { createSaltedPinRecord } from '../../domain/security/app-lock';
 import type {
   ColorMode,
@@ -113,12 +118,16 @@ export function SettingsView(): ReactElement {
     streakDays,
     maxStreakDays,
     thousandsInputMode,
+    numberFormat,
+    enabledCurrencies,
     hideBalances,
     notificationPrefs,
     setThemeId,
     setColorMode,
     setActiveTab,
     setThousandsInputMode,
+    setNumberFormat,
+    toggleEnabledCurrency,
     toggleHideBalances,
     updateNotificationPrefs,
     setSyncStatus,
@@ -610,6 +619,88 @@ export function SettingsView(): ReactElement {
                           <option value="VND">VND (₫)</option>
                           <option value="USD">USD ($)</option>
                         </select>
+                      </div>
+
+                      {/* Thousand / Decimal Separator Format Option (",/." vs "./,") */}
+                      <div className="space-y-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-card)] p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--ink-primary)]">
+                            {isVi
+                              ? 'Định dạng phân cách Hàng nghìn / Thập phân'
+                              : 'Thousand / Decimal Separator Format'}
+                          </span>
+                          <span className="rounded-full bg-[var(--bg-subtle)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--ink-secondary)] tabular-nums">
+                            {numberFormat === 'comma_dot' ? ', / .' : '. / ,'}
+                          </span>
+                        </div>
+                        <SegmentedControl<NumberFormatStyle>
+                          ariaLabel={
+                            isVi
+                              ? 'Định dạng phân cách Hàng nghìn / Thập phân'
+                              : 'Thousand / Decimal Separator'
+                          }
+                          size="sm"
+                          value={numberFormat}
+                          onChange={setNumberFormat}
+                          className="w-full"
+                          options={[
+                            {
+                              id: 'dot_comma',
+                              label: '1.000.000,50 (. / ,)',
+                            },
+                            {
+                              id: 'comma_dot',
+                              label: '1,000,000.50 (, / .)',
+                            },
+                          ]}
+                        />
+                      </div>
+
+                      {/* Database Currencies Manager: Map all 20 DB currencies, only show enabled ones in UI */}
+                      <div className="space-y-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-card)] p-3">
+                        <div>
+                          <p className="text-xs font-bold text-[var(--ink-primary)]">
+                            {isVi
+                              ? 'Ngoại tệ hiển thị trên giao diện (Thêm / Bớt)'
+                              : 'Active Currencies Shown in UI'}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-medium text-[var(--ink-secondary)]">
+                            {isVi
+                              ? 'Chỉ những loại tiền tệ được chọn dưới đây mới xuất hiện trên thanh chọn tiền tệ khi nhập giao dịch & tạo ví.'
+                              : 'Only checked currencies below will appear in your currency pickers.'}
+                          </p>
+                        </div>
+
+                        <div
+                          data-testid="settings-currency-catalog-grid"
+                          className="grid grid-cols-2 gap-1.5 sm:grid-cols-3"
+                        >
+                          {ALL_DATABASE_CURRENCIES.map((code) => {
+                            const meta = CURRENCY_METADATA[code];
+                            const isEnabled = (enabledCurrencies ?? ['VND']).includes(code);
+                            return (
+                              <button
+                                key={code}
+                                type="button"
+                                data-testid={`settings-currency-toggle-${code}`}
+                                onClick={() => toggleEnabledCurrency(code)}
+                                className={`flex items-center justify-between rounded-xl border px-2.5 py-1.5 text-left text-xs transition ${
+                                  isEnabled
+                                    ? 'border-[#191919] bg-[#191919] font-extrabold text-[#FAFAFA]'
+                                    : 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-secondary)] hover:border-[#191919] hover:text-[var(--ink-primary)]'
+                                }`}
+                              >
+                                <div className="min-w-0 truncate">
+                                  <span className="font-black">{code}</span>
+                                  <span className="ml-1 text-[10px] opacity-80">
+                                    ({meta.symbol}) · {isVi ? meta.nameVi : meta.nameEn}
+                                  </span>
+                                </div>
+                                {isEnabled && <Check className="h-3.5 w-3.5 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 

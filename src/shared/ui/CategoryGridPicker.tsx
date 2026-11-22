@@ -473,7 +473,7 @@ export function CategoryGridPicker({
 
           <div className="flex items-center gap-2">
             <CategoryIcon iconName={newParentIcon} colorHex={newParentColor} size="md" />
-            <div className="relative min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-2 focus-within:border-[#191919]">
               <input
                 type="text"
                 maxLength={MAX_CATEGORY_NAME_LENGTH}
@@ -482,9 +482,9 @@ export function CategoryGridPicker({
                   setNewParentName(e.target.value.slice(0, MAX_CATEGORY_NAME_LENGTH))
                 }
                 placeholder={isVi ? 'Tên danh mục (VD: Thú cưng)...' : 'Category name...'}
-                className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-2 pr-12 text-xs font-bold text-[var(--ink-primary)] focus:border-[#191919] focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[var(--ink-primary)] focus:outline-none"
               />
-              <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[10px] font-bold text-[var(--ink-muted)] tabular-nums">
+              <span className="shrink-0 text-[10px] font-bold text-[var(--ink-muted)] tabular-nums">
                 {newParentName.length}/{MAX_CATEGORY_NAME_LENGTH}
               </span>
             </div>
@@ -625,7 +625,7 @@ export function CategoryGridPicker({
             <div className="space-y-2 rounded-2xl border border-[#191919] bg-[var(--bg-subtle)] p-2.5">
               <div className="flex items-center gap-2">
                 <CategoryIcon iconName={newSubIcon} colorHex={activeParent.color_hex} size="sm" />
-                <div className="relative min-w-0 flex-1">
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-1.5 focus-within:border-[#191919]">
                   <input
                     type="text"
                     maxLength={MAX_CATEGORY_NAME_LENGTH}
@@ -638,9 +638,9 @@ export function CategoryGridPicker({
                         ? `Thêm mục con vào "${getCategoryDisplayName(activeParent, t)}"...`
                         : `New subcategory in "${getCategoryDisplayName(activeParent, t)}"...`
                     }
-                    className="w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-1.5 pr-11 text-xs font-bold text-[var(--ink-primary)] focus:border-[#191919] focus:outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[var(--ink-primary)] focus:outline-none"
                   />
-                  <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
+                  <span className="shrink-0 text-[9px] font-bold text-[var(--ink-muted)] tabular-nums">
                     {newSubName.length}/{MAX_CATEGORY_NAME_LENGTH}
                   </span>
                 </div>

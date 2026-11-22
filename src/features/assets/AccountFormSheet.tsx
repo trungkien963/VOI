@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useUiStore } from '../../app/ui-store';
 import { localDb } from '../../db/dexie-schema';
 import { accountRepository } from '../../db/repositories/account-repository';
 import { budgetRepository } from '../../db/repositories/budget-repository';
@@ -8,7 +9,9 @@ import { onboardingRepository } from '../../db/repositories/onboarding-repositor
 import { pocketRepository } from '../../db/repositories/pocket-repository';
 import { makeFundBudgetKey } from '../../domain/budgets/budget-calculator';
 import {
+  ALL_DATABASE_CURRENCIES,
   formatMoney,
+  formatNumberInputLive,
   fromMinorUnits,
   parseFlexibleMoneyInput,
   type CurrencyCode,
@@ -26,16 +29,7 @@ export interface AccountFormSheetProps {
   onClose: () => void;
 }
 
-export const CURRENCY_OPTIONS: ReadonlyArray<CurrencyCode> = [
-  'VND',
-  'USD',
-  'TWD',
-  'EUR',
-  'JPY',
-  'SGD',
-  'KRW',
-  'THB',
-];
+export const CURRENCY_OPTIONS: ReadonlyArray<CurrencyCode> = ALL_DATABASE_CURRENCIES;
 
 interface ExtraCurrencyDraft {
   currency: CurrencyCode;
@@ -50,15 +44,20 @@ export function AccountFormSheet({
   onClose,
 }: AccountFormSheetProps): ReactElement {
   const { t, locale } = useTranslation();
+  const { numberFormat, enabledCurrencies, addEnabledCurrency } = useUiStore();
   const isVi = locale === 'vi';
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState<AccountType>('bank');
   const [currency, setCurrency] = useState<CurrencyCode>('VND');
   const [openingBalanceText, setOpeningBalanceText] = useState('0');
-  const [monthlyTargetText, setMonthlyTargetText] = useState('3000000');
-  const [goalTargetText, setGoalTargetText] = useState('50000000');
+  const [monthlyTargetText, setMonthlyTargetText] = useState('3.000.000');
+  const [goalTargetText, setGoalTargetText] = useState('50.000.000');
   const [extraCurrencies, setExtraCurrencies] = useState<ExtraCurrencyDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const visiblePillCurrencies: ReadonlyArray<CurrencyCode> = Array.from(
+    new Set<CurrencyCode>([...(enabledCurrencies ?? ['VND', 'USD', 'TWD']), currency]),
+  );
 
   const accountPockets = useLiveQuery(
     async () => {
@@ -77,7 +76,9 @@ export function AccountFormSheet({
       const curr = (defaultPocket?.currency ?? editingAccount.currency ?? 'VND') as CurrencyCode;
       setCurrency(curr);
       const balMinor = defaultPocket?.cached_balance_minor ?? editingAccount.cached_balance_minor;
-      setOpeningBalanceText(String(fromMinorUnits(balMinor, curr)));
+      setOpeningBalanceText(
+        formatNumberInputLive(String(fromMinorUnits(balMinor, curr)), numberFormat),
+      );
 
       const nonDefaultPockets = accountPockets.filter(
         (p) => !p.is_default && p.id !== defaultPocket?.id,
@@ -87,7 +88,10 @@ export function AccountFormSheet({
           const pCurr = (p.currency ?? 'USD') as CurrencyCode;
           return {
             currency: pCurr,
-            balanceText: String(fromMinorUnits(p.cached_balance_minor, pCurr)),
+            balanceText: formatNumberInputLive(
+              String(fromMinorUnits(p.cached_balance_minor, pCurr)),
+              numberFormat,
+            ),
             existingPocketId: p.id,
           };
         }),
@@ -332,7 +336,11 @@ export function AccountFormSheet({
               id="account-currency-select"
               name="currency"
               value={currency}
-              onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+              onChange={(e) => {
+                const nextCurr = e.target.value as CurrencyCode;
+                addEnabledCurrency(nextCurr);
+                setCurrency(nextCurr);
+              }}
               className="mt-1 w-full rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--ink-primary)]"
             >
               {CURRENCY_OPTIONS.map((code) => (
@@ -344,13 +352,13 @@ export function AccountFormSheet({
           </div>
         </div>
 
-        {/* Visual 1-Tap Currency Pill Bar */}
+        {/* Visual 1-Tap Currency Pill Bar (Shows only User's Enabled Currencies!) */}
         <div className="space-y-1">
           <span className="block text-[11px] font-bold text-[var(--ink-secondary)]">
-            {isVi ? 'Chọn nhanh tiền tệ chính (chạm 1 lần):' : 'Quick select primary currency:'}
+            {isVi ? 'Chọn nhanh tiền tệ đã bật:' : 'Quick select enabled currency:'}
           </span>
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-            {CURRENCY_OPTIONS.map((code) => {
+            {visiblePillCurrencies.map((code) => {
               const active = currency === code;
               return (
                 <button
@@ -392,7 +400,9 @@ export function AccountFormSheet({
             type="text"
             inputMode="decimal"
             value={openingBalanceText}
-            onChange={(e) => setOpeningBalanceText(e.target.value)}
+            onChange={(e) =>
+              setOpeningBalanceText(formatNumberInputLive(e.target.value, numberFormat))
+            }
             className="mt-1 w-full rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3.5 py-2.5 text-sm font-bold text-[var(--ink-primary)] tabular-nums focus:border-[#18181B] focus:outline-none"
           />
         </div>
@@ -461,7 +471,7 @@ export function AccountFormSheet({
                       aria-label={isVi ? `Số dư ${item.currency}` : `${item.currency} balance`}
                       value={item.balanceText}
                       onChange={(e) => {
-                        const val = e.target.value;
+                        const val = formatNumberInputLive(e.target.value, numberFormat);
                         setExtraCurrencies((prev) =>
                           prev.map((row, i) => (i === idx ? { ...row, balanceText: val } : row)),
                         );
@@ -502,8 +512,10 @@ export function AccountFormSheet({
                 type="text"
                 inputMode="decimal"
                 value={monthlyTargetText}
-                onChange={(e) => setMonthlyTargetText(e.target.value)}
-                placeholder="3000000"
+                onChange={(e) =>
+                  setMonthlyTargetText(formatNumberInputLive(e.target.value, numberFormat))
+                }
+                placeholder="3.000.000"
                 className="mt-1 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-2 text-xs font-extrabold text-[var(--ink-primary)] tabular-nums"
               />
             </div>
@@ -515,8 +527,10 @@ export function AccountFormSheet({
                 type="text"
                 inputMode="decimal"
                 value={goalTargetText}
-                onChange={(e) => setGoalTargetText(e.target.value)}
-                placeholder="50000000"
+                onChange={(e) =>
+                  setGoalTargetText(formatNumberInputLive(e.target.value, numberFormat))
+                }
+                placeholder="50.000.000"
                 className="mt-1 w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-card)] px-3 py-2 text-xs font-extrabold text-[var(--ink-primary)] tabular-nums"
               />
             </div>

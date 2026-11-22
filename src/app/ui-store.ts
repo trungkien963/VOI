@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
+  DEFAULT_ENABLED_CURRENCIES,
+  setGlobalNumberFormatStyle,
+  type CurrencyCode,
+  type NumberFormatStyle,
+} from '../domain/money/currency';
+import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   type NotificationPreferences,
 } from '../domain/notifications/notification-scheduler';
@@ -57,6 +63,8 @@ interface UiState {
   quickAddPresetText: string | null;
   editingTransactionId: string | null;
   thousandsInputMode: boolean;
+  numberFormat: NumberFormatStyle;
+  enabledCurrencies: CurrencyCode[];
   hideBalances: boolean;
   locale: SupportedLocale;
   themeId: ThemeId;
@@ -82,6 +90,9 @@ interface UiState {
   openEditTransaction: (transactionId: string) => void;
   closeQuickAdd: () => void;
   setThousandsInputMode: (enabled: boolean) => void;
+  setNumberFormat: (format: NumberFormatStyle) => void;
+  toggleEnabledCurrency: (code: CurrencyCode) => void;
+  addEnabledCurrency: (code: CurrencyCode) => void;
   toggleHideBalances: () => void;
   setLocale: (locale: SupportedLocale) => void;
   toggleLocale: () => void;
@@ -124,6 +135,8 @@ export const useUiStore = create<UiState>()(
       quickAddPresetText: null,
       editingTransactionId: null,
       thousandsInputMode: true,
+      numberFormat: 'dot_comma',
+      enabledCurrencies: [...DEFAULT_ENABLED_CURRENCIES],
       hideBalances: false,
       locale: 'en',
       themeId: 'pop',
@@ -181,6 +194,25 @@ export const useUiStore = create<UiState>()(
           quickAddPresetText: null,
         }),
       setThousandsInputMode: (thousandsInputMode) => set({ thousandsInputMode }),
+      setNumberFormat: (numberFormat) => {
+        setGlobalNumberFormatStyle(numberFormat);
+        set({ numberFormat });
+      },
+      toggleEnabledCurrency: (code) =>
+        set((state) => {
+          const current = state.enabledCurrencies ?? [...DEFAULT_ENABLED_CURRENCIES];
+          if (current.includes(code)) {
+            if (current.length <= 1) return state;
+            return { enabledCurrencies: current.filter((c) => c !== code) };
+          }
+          return { enabledCurrencies: [...current, code] };
+        }),
+      addEnabledCurrency: (code) =>
+        set((state) => {
+          const current = state.enabledCurrencies ?? [...DEFAULT_ENABLED_CURRENCIES];
+          if (current.includes(code)) return state;
+          return { enabledCurrencies: [...current, code] };
+        }),
       toggleHideBalances: () => set((state) => ({ hideBalances: !state.hideBalances })),
       setLocale: (locale) => {
         applyLocaleToDom(locale);
@@ -289,6 +321,7 @@ export const useUiStore = create<UiState>()(
           if (state.avatarId === 'rose' && state.themeId === 'pop') {
             state.themeId = 'rose';
           }
+          setGlobalNumberFormatStyle(state.numberFormat ?? 'dot_comma');
           applyThemeToDom(state.themeId, state.colorMode);
           applyLocaleToDom(state.locale);
         }

@@ -1,6 +1,11 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { useUiStore } from '../../app/ui-store';
 import { pocketRepository } from '../../db/repositories/pocket-repository';
-import { formatMoney, parseFlexibleMoneyInput } from '../../domain/money/currency';
+import {
+  formatMoney,
+  formatNumberInputLive,
+  parseFlexibleMoneyInput,
+} from '../../domain/money/currency';
 import type { Pocket } from '../../domain/types/entities';
 import { useTranslation } from '../../shared/i18n';
 import { BottomSheet } from '../../shared/ui/BottomSheet';
@@ -19,6 +24,7 @@ export function ReconcileSheet({
   onReconciled,
 }: ReconcileSheetProps): ReactElement | null {
   const { t } = useTranslation();
+  const numberFormat = useUiStore((s) => s.numberFormat);
   const [actualMajorText, setActualMajorText] = useState('');
 
   if (!pocket) return null;
@@ -81,7 +87,9 @@ export function ReconcileSheet({
             type="text"
             inputMode="decimal"
             value={actualMajorText}
-            onChange={(e) => setActualMajorText(e.target.value)}
+            onChange={(e) =>
+              setActualMajorText(formatNumberInputLive(e.target.value, numberFormat))
+            }
             placeholder="0"
             className="mt-1 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2.5 text-sm font-bold text-[var(--ink-primary)] tabular-nums"
           />

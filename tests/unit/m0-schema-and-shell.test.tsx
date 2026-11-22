@@ -147,6 +147,14 @@ describe('Milestone 0: Clean Architecture, Multi-Language (EN Default + VI) & Mo
     expect(screen.getByText(en.quickAddModal.title)).toBeInTheDocument();
     expect(screen.getByText('Food & Dining')).toBeInTheDocument();
 
+    // Keypad is collapsed by default; tap the purple stage box to expand keypad
+    expect(screen.queryByRole('button', { name: 'Key 3' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('quick-add-account-scroll')).toBeInTheDocument();
+    expect(screen.getByTestId('quick-add-currency-scroll')).toBeInTheDocument();
+    expect(screen.getByTestId('quick-add-sticky-submit-btn')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('calculator-stage-box'));
+
     fireEvent.click(screen.getByRole('button', { name: 'Key 3' }));
     fireEvent.click(screen.getByRole('button', { name: 'Key 6' }));
     fireEvent.click(screen.getByRole('button', { name: 'Key 0' }));
@@ -154,6 +162,14 @@ describe('Milestone 0: Clean Architecture, Multi-Language (EN Default + VI) & Mo
     fireEvent.click(screen.getByRole('button', { name: 'Key ÷' }));
     fireEvent.click(screen.getByRole('button', { name: 'Key 3' }));
     expect(screen.getByTestId('calculator-evaluated-amount')).toHaveTextContent('120.000đ');
+    // Press the sticky button once to evaluate (=) 360000 ÷ 3 -> 120000
+    fireEvent.click(screen.getByTestId('quick-add-sticky-submit-btn'));
+    // Still disabled because note is empty; typing a note enables the frozen submit button
+    expect(screen.getByTestId('quick-add-sticky-submit-btn')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('quick-add-smart-note-input'), {
+      target: { value: 'Coffee with team' },
+    });
+    expect(screen.getByTestId('quick-add-sticky-submit-btn')).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: en.quickAddModal.closeBtn }));
 
     // 3. Switch language from EN -> VI inside Settings -> Appearance
